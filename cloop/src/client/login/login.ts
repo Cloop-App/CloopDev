@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '../../config/api';
+
 interface LoginResponse {
   token?: string;
   user: {
@@ -13,7 +15,7 @@ interface LoginRequest {
 
 export const loginUser = async (data: LoginRequest): Promise<LoginResponse> => {
   try {
-    const response = await fetch('http://localhost:4000/api/login', {
+    const response = await fetch(`${API_BASE_URL}/api/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

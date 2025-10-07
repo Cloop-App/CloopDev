@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken } = require('../../middleware/auth');
 
 const { PrismaClient } = require('../../generated/prisma');
 const prisma = new PrismaClient();
 
 // PUT /api/profile/update
-router.put('/update', async (req, res) => {
+router.put('/update', authenticateToken, async (req, res) => {
   const { 
     grade_level, 
     board, 
@@ -16,11 +17,11 @@ router.put('/update', async (req, res) => {
     avatar_url 
   } = req.body;
 
-  // TODO: Add authentication middleware to get user_id
-  const user_id = req.user?.user_id; // This will be set by auth middleware
+  // Get user_id from authenticated token
+  const user_id = req.user?.user_id;
 
   if (!user_id) {
-    return res.status(401).json({ error: 'Authentication required' });
+    return res.status(401).json({ error: 'User ID not found in token' });
   }
 
   try {

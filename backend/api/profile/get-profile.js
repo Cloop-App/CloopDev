@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken } = require('../../middleware/auth');
 
 const { PrismaClient } = require('../../generated/prisma');
 const prisma = new PrismaClient();
 
 // GET /api/profile
-router.get('/', async (req, res) => {
-  // Prefer authenticated user id from req.user (if auth middleware is used)
+router.get('/', authenticateToken, async (req, res) => {
+  // Get user_id from authenticated token
   let user_id = req.user?.user_id;
 
   // Allow a query fallback for development/testing: /api/profile?user_id=1
@@ -16,9 +17,9 @@ router.get('/', async (req, res) => {
     if (!Number.isNaN(parsed)) user_id = parsed;
   }
 
-  // If still no user_id, return a helpful message instead of strict 401 so frontend dev can test
+  // If still no user_id, return error
   if (!user_id) {
-    return res.status(400).json({ error: 'Missing user_id. Attach auth or call /api/profile?user_id=<id> for dev.' });
+    return res.status(400).json({ error: 'User ID not found in token' });
   }
 
   try {

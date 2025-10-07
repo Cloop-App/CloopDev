@@ -7,7 +7,7 @@ const router = express.Router()
 const { PrismaClient } = require('../../generated/prisma')
 const prisma = new PrismaClient()
 
-const JWT_SECRET = process.env.JWT_SECRET || null
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
 // POST /api/login/  { emailOrPhone }
 // New behavior: accept an email or phone and return the user if found (no password required)
@@ -34,12 +34,9 @@ router.post('/', async (req, res) => {
 			name: user.name,
 		}
 
-		if (JWT_SECRET) {
-			const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
-			return res.json({ token, user: payload })
-		}
-
-		return res.json({ user: payload })
+		// Always generate a token since JWT_SECRET is required
+		const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
+		return res.json({ token, user: payload })
 	} catch (err) {
 		console.error(err)
 		return res.status(500).json({ error: 'Server error' })

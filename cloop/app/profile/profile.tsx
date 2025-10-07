@@ -1,19 +1,35 @@
 import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ActivityIndicator, Image, ScrollView, Pressable } from 'react-native'
+import { useRouter } from 'expo-router'
 import { fetchUserProfile, UserProfile } from '../../src/client/profile/fetch-profile'
+import { useAuth } from '../../src/context/AuthContext'
 
 export default function ProfileScreen() {
+	const router = useRouter()
+	const { isAuthenticated, user, token } = useAuth()
 	const [profile, setProfile] = useState<UserProfile | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
+		if (!isAuthenticated) {
+			router.replace('/login-sigup/login')
+			return
+		}
+	}, [isAuthenticated, router])
+
+	useEffect(() => {
+		if (!isAuthenticated || !user) return
+
 		let mounted = true
 		setLoading(true)
 		setError(null)
 
-		// For dev, you can pass userId: 1 if backend doesn't have auth
-		fetchUserProfile()
+		// Use the authenticated user's ID and token
+		fetchUserProfile({ 
+			userId: user.user_id, 
+			token: token || undefined 
+		})
 			.then((p) => {
 				if (mounted) setProfile(p)
 			})
@@ -27,7 +43,16 @@ export default function ProfileScreen() {
 		return () => {
 			mounted = false
 		}
-	}, [])
+	}, [isAuthenticated, user, token])
+
+	// Show loading or redirect if not authenticated
+	if (!isAuthenticated) {
+		return (
+			<View style={[styles.container, styles.center]}>
+				<Text>Redirecting to login...</Text>
+			</View>
+		)
+	}
 
 	if (loading) {
 		return (

@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../src/context/AuthContext';
 
 export default function Index() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/home/home');
+    }
+  }, [isAuthenticated, router]);
 
   return (
     <View style={styles.container}>
@@ -66,4 +74,3 @@ const styles = StyleSheet.create({
   btnTextSecondary: { color: '#fff', fontWeight: '800' },
   footer: { marginTop: 18, color: '#9FB3C8' },
 });
-          <Text style={styles.tag}>Your Agentic AI Tutor</Text>

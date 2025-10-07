@@ -16,14 +16,23 @@ export interface UserProfile {
 
 const DEFAULT_BASE = 'http://localhost:4000'
 
-export const fetchUserProfile = async (opts?: { userId?: number; baseUrl?: string }): Promise<UserProfile> => {
+export const fetchUserProfile = async (opts?: { 
+  userId?: number; 
+  baseUrl?: string; 
+  token?: string;
+}): Promise<UserProfile> => {
   const base = opts?.baseUrl || process.env.BACKEND_URL || DEFAULT_BASE
   const url = new URL('/api/profile', base)
   if (opts?.userId) url.searchParams.set('user_id', String(opts.userId))
 
+  const headers: HeadersInit = { 'Content-Type': 'application/json' }
+  if (opts?.token) {
+    headers.Authorization = `Bearer ${opts.token}`
+  }
+
   const response = await fetch(url.toString(), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
   })
 
   if (!response.ok) {

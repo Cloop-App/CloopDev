@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { loginUser } from '../../src/client/login/login';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { login } = useAuth();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Array<{ id: number; text: string; sender: string }>>([
@@ -34,6 +36,16 @@ export default function LoginScreen() {
       const userName = res?.user?.name || '';
       const successMessage = { id: Date.now() + 1, text: `Great${userName ? `, ${userName}` : ''}! Logging you in...`, sender: 'bot' };
       setMessages(prev => [...prev, successMessage]);
+      
+      // Store authentication data - ensure we have a valid token
+      if (res.user) {
+        const token = res.token || null;
+        if (!token) {
+          throw new Error('No authentication token received from server');
+        }
+        await login(token, res.user);
+      }
+      
       setTimeout(() => router.push('/home/home'), 800);
     } catch (err) {
       const errorMessageText = err instanceof Error ? err.message : 'An unknown error occurred.';

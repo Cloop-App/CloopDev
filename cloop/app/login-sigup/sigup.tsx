@@ -1,14 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-// Make sure to import your actual signup function
-// import { signupUser } from '../../src/client/signup/signup';
-
-// Mock signup function for demonstration
-const signupUser = async (payload: any) => {
-  console.log("Signing up with payload:", payload);
-  return new Promise(resolve => setTimeout(resolve, 1500));
-};
+import { signupUser } from '../../src/client/signup/signup';
 
 
 // Define the structure for questions, including types and options
