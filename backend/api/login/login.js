@@ -12,10 +12,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 // POST /api/login/  { emailOrPhone }
 // New behavior: accept an email or phone and return the user if found (no password required)
 router.post('/', async (req, res) => {
+	console.log('Login request received:', req.body);
+	
 	const { emailOrPhone } = req.body
-	if (!emailOrPhone) return res.status(400).json({ error: 'emailOrPhone required' })
+	if (!emailOrPhone) {
+		console.log('Login error: emailOrPhone required');
+		return res.status(400).json({ error: 'emailOrPhone required' });
+	}
 
 	try {
+		console.log('Searching for user with:', emailOrPhone);
+		
 		// Try to find by email first, then by phone
 		const user = await prisma.users.findFirst({
 			where: {
@@ -26,7 +33,12 @@ router.post('/', async (req, res) => {
 			},
 		})
 
-		if (!user) return res.status(401).json({ error: 'User not found' })
+		if (!user) {
+			console.log('User not found for:', emailOrPhone);
+			return res.status(401).json({ error: 'User not found' });
+		}
+
+		console.log('User found:', { user_id: user.user_id, email: user.email, name: user.name });
 
 		const payload = {
 			user_id: user.user_id,
@@ -36,14 +48,16 @@ router.post('/', async (req, res) => {
 
 		// Always generate a token since JWT_SECRET is required
 		const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
+		console.log('Login successful, token generated');
+		
 		return res.json({ token, user: payload })
 	} catch (err) {
-		console.error(err)
+		console.error('Login server error:', err)
 		return res.status(500).json({ error: 'Server error' })
 	}
 })
 
-// --- Simple user CRUD for account management ---
+// --- Simple user CRUD for account management -
 
 // GET /api/login/users/:id
 router.get('/users/:id', async (req, res) => {

@@ -38,8 +38,10 @@ class AuthService {
 
   private async initializeAuth() {
     try {
-      const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-      const userData = await AsyncStorage.getItem(USER_KEY);
+      const [token, userData] = await Promise.all([
+        AsyncStorage.getItem(AUTH_TOKEN_KEY),
+        AsyncStorage.getItem(USER_KEY)
+      ]);
       
       if (token && userData) {
         const user = JSON.parse(userData);
@@ -49,10 +51,30 @@ class AuthService {
           isAuthenticated: true,
         };
         this.notifyListeners();
+      } else {
+        // Ensure state is properly reset if no data found
+        this._authState = {
+          token: null,
+          user: null,
+          isAuthenticated: false,
+        };
+        this.notifyListeners();
       }
     } catch (error) {
       console.error('Error initializing auth:', error);
-      await this.logout();
+      // Reset state on error
+      this._authState = {
+        token: null,
+        user: null,
+        isAuthenticated: false,
+      };
+      this.notifyListeners();
+      // Clear any corrupted data
+      try {
+        await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, USER_KEY]);
+      } catch (clearError) {
+        console.error('Error clearing corrupted auth data:', clearError);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
+const CurriculumAutoTrigger = require('../../services/curriculum-auto-trigger');
 
 const { PrismaClient } = require('../../generated/prisma');
 const prisma = new PrismaClient();
@@ -53,6 +54,18 @@ router.put('/update', authenticateToken, async (req, res) => {
     });
 
     return res.json({ success: true, user: updatedUser });
+    
+    // Auto-trigger curriculum generation if profile is complete
+    CurriculumAutoTrigger.handleProfileUpdate(user_id, {
+      grade_level,
+      board,
+      subjects,
+      preferred_language,
+      study_goal
+    }).catch(error => {
+      console.error('Auto-trigger curriculum generation failed:', error);
+    });
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });

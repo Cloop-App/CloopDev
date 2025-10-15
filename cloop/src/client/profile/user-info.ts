@@ -10,11 +10,27 @@ export interface UserBasicInfo {
   phone?: string;
 }
 
+export interface UserSubject {
+  id: number;
+  subject_id: number;
+  total_chapters: number;
+  completed_chapters: number;
+  completion_percent: number;
+  created_at: string;
+  subject: {
+    id: number;
+    name: string;
+    code?: string;
+    category?: string;
+  };
+}
+
 export interface UserAcademicInfo {
   user_id: number;
   grade_level: string;
   board: string;
-  subjects: string[];
+  subjects: string[]; // Keep for backward compatibility
+  user_subjects: UserSubject[]; // New field for subject details
   preferred_language: string;
   study_goal: string;
 }
@@ -91,6 +107,7 @@ export const fetchUserAcademicInfo = async (opts?: {
     grade_level: profile.grade_level,
     board: profile.board,
     subjects: profile.subjects,
+    user_subjects: profile.user_subjects || [],
     preferred_language: profile.preferred_language,
     study_goal: profile.study_goal,
   }
@@ -134,10 +151,11 @@ export const fetchUserSubjects = async (opts?: {
   userId?: number; 
   baseUrl?: string; 
   token?: string;
-}): Promise<{ subjects: string[]; preferred_language: string }> => {
+}): Promise<{ subjects: string[]; preferred_language: string; user_subjects: UserSubject[] }> => {
   const profile = await fetchUserProfile(opts)
   return {
     subjects: profile.subjects,
+    user_subjects: profile.user_subjects || [],
     preferred_language: profile.preferred_language,
   }
 }
@@ -153,6 +171,7 @@ export const fetchUserStudyPreferences = async (opts?: {
   board: string; 
   grade_level: string; 
   subjects: string[]; 
+  user_subjects: UserSubject[];
   preferred_language: string; 
   study_goal: string; 
 }> => {
@@ -161,6 +180,7 @@ export const fetchUserStudyPreferences = async (opts?: {
     board: profile.board,
     grade_level: profile.grade_level,
     subjects: profile.subjects,
+    user_subjects: profile.user_subjects || [],
     preferred_language: profile.preferred_language,
     study_goal: profile.study_goal,
   }

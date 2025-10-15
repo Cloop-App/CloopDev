@@ -31,7 +31,7 @@ router.get('/', authenticateToken, async (req, res) => {
         email: true,
         grade_level: true,
         board: true,
-        subjects: true,
+        subjects: true, // Keep for backward compatibility
         preferred_language: true,
         study_goal: true,
         avatar_choice: true,
@@ -46,7 +46,76 @@ router.get('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    return res.json(user);
+    // Fetch user's subjects from user_subjects table
+    const userSubjects = await prisma.user_subjects.findMany({
+      where: { user_id: user_id },
+      include: {
+        subjects: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            category: true,
+          }
+        }
+      }
+    });
+
+    // Update chapter counts from actual chapters table
+    for (const userSubject of userSubjects) {
+      const actualChapterCount = await prisma.chapters.count({
+        where: {
+          subject_id: userSubject.subject_id,
+          user_id: user_id
+        }
+      });
+
+      const completedChapterCount = await prisma.chapters.count({
+        where: {
+          subject_id: userSubject.subject_id,
+          user_id: user_id,
+          completion_percent: { gte: 100 }
+        }
+      });
+
+      // Update the user_subjects record if counts differ
+      if (actualChapterCount !== userSubject.total_chapters || 
+          completedChapterCount !== userSubject.completed_chapters) {
+        await prisma.user_subjects.update({
+          where: {
+            id: userSubject.id
+          },
+          data: {
+            total_chapters: actualChapterCount,
+            completed_chapters: completedChapterCount,
+            completion_percent: actualChapterCount > 0 ? 
+              Math.round((completedChapterCount / actualChapterCount) * 100) : 0
+          }
+        });
+
+        // Update the local object
+        userSubject.total_chapters = actualChapterCount;
+        userSubject.completed_chapters = completedChapterCount;
+        userSubject.completion_percent = actualChapterCount > 0 ? 
+          Math.round((completedChapterCount / actualChapterCount) * 100) : 0;
+      }
+    }
+
+    // Add the subjects data to the user object
+    const userWithSubjects = {
+      ...user,
+      user_subjects: userSubjects.map(us => ({
+        id: us.id,
+        subject_id: us.subject_id,
+        total_chapters: us.total_chapters,
+        completed_chapters: us.completed_chapters,
+        completion_percent: us.completion_percent,
+        created_at: us.created_at,
+        subject: us.subjects
+      }))
+    };
+
+    return res.json(userWithSubjects);
   } catch (err) {
     console.error('Error fetching user profile:', err);
     return res.status(500).json({ error: 'Server error' });

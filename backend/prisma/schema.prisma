@@ -24,3 +24,126 @@ model users {
   avatar_choice      String?   @db.VarChar(50)
   phone              String?   @db.VarChar(50)
 }
+
+model boards {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique
+  name        String
+  description String?
+}
+
+model chapters {
+  id                 Int           @id @default(autoincrement())
+  subject_id         Int
+  user_id            Int
+  title              String
+  content            String?
+  created_at         DateTime?     @default(now()) @db.Timestamp(6)
+  total_topics       Int?          @default(0)
+  completed_topics   Int?          @default(0)
+  completion_percent Decimal?      @default(0.00) @db.Decimal(5, 2)
+  subjects           subjects      @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  topic_chats        topic_chats[]
+  topics             topics[]
+}
+
+model grades {
+  id          Int     @id @default(autoincrement())
+  grade_level Int     @unique
+  description String?
+}
+
+model languages {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  name        String
+  native_name String?
+  rtl         Boolean? @default(false)
+}
+
+model subjects {
+  id            Int             @id @default(autoincrement())
+  code          String?         @unique
+  name          String
+  category      String?
+  chapters      chapters[]
+  topic_chats   topic_chats[]
+  topics        topics[]
+  user_subjects user_subjects[]
+  content_generation_status content_generation_status[]
+}
+
+model topic_chats {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  subject_id Int
+  chapter_id Int
+  topic_id   Int
+  sender     String
+  message    String?
+  file_url   String?
+  file_type  String?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  chapters   chapters  @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subjects   subjects  @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  topics     topics    @relation(fields: [topic_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model topics {
+  id                 Int           @id @default(autoincrement())
+  subject_id         Int
+  chapter_id         Int
+  user_id            Int
+  title              String
+  content            String?
+  created_at         DateTime?     @default(now()) @db.Timestamp(6)
+  is_completed       Boolean?      @default(false)
+  completion_percent Decimal?      @default(0.00) @db.Decimal(5, 2)
+  topic_chats        topic_chats[]
+  chapters           chapters      @relation(fields: [chapter_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subjects           subjects      @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_chats {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  sender     String
+  message    String?
+  file_url   String?
+  file_type  String?
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model user_subjects {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int
+  subject_id         Int
+  total_chapters     Int?      @default(0)
+  completed_chapters Int?      @default(0)
+  completion_percent Decimal?  @default(0.00) @db.Decimal(5, 2)
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+  subjects           subjects  @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, subject_id])
+}
+
+model content_generation_status {
+  id                    Int       @id @default(autoincrement())
+  user_id               Int
+  subject_id            Int
+  grade_level           String    @db.VarChar(50)
+  board                 String    @db.VarChar(50)
+  chapters_generated    Boolean   @default(false)
+  topics_generated      Boolean   @default(false)
+  generation_started_at DateTime? @db.Timestamp(6)
+  generation_completed_at DateTime? @db.Timestamp(6)
+  status                String    @default("pending") @db.VarChar(50) // pending, in_progress, completed, failed
+  error_message         String?
+  created_at            DateTime? @default(now()) @db.Timestamp(6)
+  updated_at            DateTime? @updatedAt @db.Timestamp(6)
+  subjects              subjects  @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, subject_id, grade_level, board])
+  @@index([user_id])
+  @@index([status])
+}

@@ -4,10 +4,11 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserProfile } from '../../src/client/profile/useUserProfile';
+import { useChatHistory } from '../../src/client/profile/useProgress';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { isAuthenticated, logout, user } = useAuth();
+  const { isAuthenticated, logout, user, isLoading } = useAuth();
   const { 
     profile, 
     academicInfo, 
@@ -17,18 +18,60 @@ export default function HomeScreen() {
     isProfileComplete,
     missingFields 
   } = useUserProfile();
+  const {
+    chatHistory,
+    loading: chatHistoryLoading,
+    error: chatHistoryError
+  } = useChatHistory();
   const [showSidebar, setShowSidebar] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/login-sigup/login');
+    // Set mounted flag after component is mounted
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted && !isLoading && !isAuthenticated) {
+      // Add small delay to ensure router is ready
+      const timer = setTimeout(() => {
+        try {
+          router.replace('/login-sigup/login');
+        } catch (error) {
+          console.error('Navigation error:', error);
+          // Fallback navigation
+          window.location.href = '/login-sigup/login';
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, isMounted, isLoading]);
 
   const handleLogout = async () => {
-    await logout();
-    router.replace('/');
+    try {
+      await logout();
+      // Use a small delay before navigation
+      setTimeout(() => {
+        try {
+          router.replace('/');
+        } catch (error) {
+          console.error('Navigation error after logout:', error);
+          window.location.href = '/';
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
+
+  // Show loading during auth initialization
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
 
   // Show loading or redirect if not authenticated
   if (!isAuthenticated) {
@@ -79,35 +122,56 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.sidebarContent}>
-            <Pressable style={styles.chatHistoryItem}>
-              <Ionicons name="chatbubble-outline" size={20} color="#666" />
-              <Text style={styles.chatHistoryText}>Mathematics Algebra</Text>
-            </Pressable>
-            <Pressable style={styles.chatHistoryItem}>
-              <Ionicons name="chatbubble-outline" size={20} color="#666" />
-              <Text style={styles.chatHistoryText}>Physics Mechanics</Text>
-            </Pressable>
-            <Pressable style={styles.chatHistoryItem}>
-              <Ionicons name="chatbubble-outline" size={20} color="#666" />
-              <Text style={styles.chatHistoryText}>Chemistry Organic</Text>
-            </Pressable>
+            {chatHistoryLoading ? (
+              <Text style={styles.loadingText}>Loading chat history...</Text>
+            ) : chatHistoryError ? (
+              <Text style={styles.errorText}>Error loading chat history</Text>
+            ) : chatHistory.length > 0 ? (
+              chatHistory.map((chat, index) => (
+                <Pressable 
+                  key={chat.topic_id} 
+                  style={styles.chatHistoryItem}
+                  onPress={() => {
+                    setShowSidebar(false);
+                    router.push(`/chat/topic-chat?topicId=${chat.topic_id}` as any);
+                  }}
+                >
+                  <Ionicons name="chatbubble-outline" size={20} color="#666" />
+                  <View style={styles.chatHistoryTextContainer}>
+                    <Text style={styles.chatHistoryText}>{chat.title}</Text>
+                    <Text style={styles.chatHistorySubject}>{chat.subject} - {chat.chapter}</Text>
+                  </View>
+                </Pressable>
+              ))
+            ) : (
+              <Text style={styles.noChatHistory}>No chat history yet</Text>
+            )}
           </ScrollView>
         </View>
       </View>
     </Modal>
   );
 
-  const renderSubjectCard = (subject: string, index: number) => (
-    <Pressable key={index} style={styles.subjectCard}>
+  const renderSubjectCard = (userSubject: any, index: number) => (
+    <Pressable 
+      key={index} 
+      style={styles.subjectCard}
+      onPress={() => router.push(`/chapter-topic/chapter?subjectId=${userSubject.subject.id}&subjectName=${encodeURIComponent(userSubject.subject.name)}` as any)}
+    >
       <View style={styles.subjectIcon}>
         <Ionicons 
-          name={getSubjectIcon(subject)} 
+          name={getSubjectIcon(userSubject.subject.name)} 
           size={24} 
           color="#2563eb" 
         />
       </View>
-      <Text style={styles.subjectName}>{subject}</Text>
-      <Text style={styles.subjectProgress}>Continue Learning</Text>
+      <Text style={styles.subjectName}>{userSubject.subject.name}</Text>
+      <Text style={styles.subjectProgress}>
+        {userSubject.completed_chapters}/{userSubject.total_chapters} chapters
+      </Text>
+      <Text style={styles.subjectCompletion}>
+        {userSubject.completion_percent}% complete
+      </Text>
     </Pressable>
   );
 
@@ -178,42 +242,88 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Subjects</Text>
           <View style={styles.subjectsGrid}>
-            {academicInfo?.subjects?.map((subject, index) => renderSubjectCard(subject, index)) || (
+            {academicInfo?.user_subjects && academicInfo.user_subjects.length > 0 ? (
+              academicInfo.user_subjects.map((userSubject, index) => renderSubjectCard(userSubject, index))
+            ) : academicInfo?.subjects && academicInfo.subjects.length > 0 ? (
+              // Fallback to old subjects array for backward compatibility
+              academicInfo.subjects.map((subject, index) => (
+                <Pressable 
+                  key={index} 
+                  style={styles.subjectCard}
+                  onPress={() => {
+                    // For old subjects array, we don't have subject ID, so show a message
+                    alert('Please update your profile to access chapters')
+                  }}
+                >
+                  <View style={styles.subjectIcon}>
+                    <Ionicons 
+                      name={getSubjectIcon(subject)} 
+                      size={24} 
+                      color="#2563eb" 
+                    />
+                  </View>
+                  <Text style={styles.subjectName}>{subject}</Text>
+                  <Text style={styles.subjectProgress}>Continue Learning</Text>
+                </Pressable>
+              ))
+            ) : (
               <Text style={styles.noSubjects}>No subjects selected</Text>
             )}
           </View>
         </View>
 
-        {/* Quick Actions */}
+
+
+        {/* Track Progress */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActions}>
-            <Pressable style={styles.actionButton}>
-              <Ionicons name="chatbubbles-outline" size={20} color="#fff" />
-              <Text style={styles.actionText}>Start Chat</Text>
-            </Pressable>
-            <Pressable style={styles.actionButton}>
-              <Ionicons name="book-outline" size={20} color="#fff" />
-              <Text style={styles.actionText}>Browse Lessons</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Track Progress</Text>
+            <Pressable 
+              style={styles.viewMetricsButton}
+              onPress={() => router.push('/profile/metrics' as any)}
+            >
+              <Text style={styles.viewMetricsText}>View Metrics</Text>
+              <Ionicons name="arrow-forward" size={16} color="#2563eb" />
             </Pressable>
           </View>
-        </View>
-
-        {/* Study Progress */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Study Progress</Text>
-          <View style={styles.progressCard}>
-            <View style={styles.progressItem}>
-              <Text style={styles.progressNumber}>{progressInfo?.num_chats || 0}</Text>
-              <Text style={styles.progressLabel}>Chats</Text>
-            </View>
-            <View style={styles.progressItem}>
-              <Text style={styles.progressNumber}>{progressInfo?.num_lessons || 0}</Text>
-              <Text style={styles.progressLabel}>Lessons</Text>
-            </View>
+          <View style={styles.trackProgressCard}>
+            {academicInfo?.user_subjects && academicInfo.user_subjects.length > 0 ? (
+              academicInfo.user_subjects.map((userSubject, index) => (
+                <View key={index} style={styles.trackProgressItem}>
+                  <View style={styles.trackProgressHeader}>
+                    <Text style={styles.trackProgressSubject}>{userSubject.subject.name}</Text>
+                    <Text style={styles.trackProgressPercent}>{userSubject.completion_percent}%</Text>
+                  </View>
+                  <View style={styles.trackProgressBar}>
+                    <View 
+                      style={[
+                        styles.trackProgressFill, 
+                        { width: `${userSubject.completion_percent}%` }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={styles.trackProgressText}>
+                    {userSubject.completed_chapters}/{userSubject.total_chapters} chapters completed
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noProgress}>No subjects enrolled yet</Text>
+            )}
           </View>
         </View>
       </ScrollView>
+
+      {/* Floating Action Button for Cloop Help */}
+      <Pressable 
+        style={styles.floatingActionButton}
+        onPress={() => router.push('/chat/normal-chat' as any)}
+      >
+        <View style={styles.fabContainer}>
+          <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
+          <Text style={styles.fabText}>Live Query</Text>
+        </View>
+      </Pressable>
 
       {renderSidebar()}
     </SafeAreaView>
@@ -363,6 +473,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  subjectCompletion: {
+    fontSize: 11,
+    color: '#2563eb',
+    fontWeight: '500',
+    marginTop: 2,
+  },
   noSubjects: {
     fontSize: 14,
     color: '#666',
@@ -380,6 +496,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     flex: 1,
+    justifyContent: 'center',
+  },
+  fullWidthActionButton: {
+    backgroundColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    width: '100%',
     justifyContent: 'center',
   },
   actionText: {
@@ -448,9 +574,131 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
+  chatHistoryTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
   chatHistoryText: {
     fontSize: 14,
     color: '#333',
-    marginLeft: 12,
+    fontWeight: '500',
+  },
+  chatHistorySubject: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  noChatHistory: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    paddingVertical: 20,
+    fontStyle: 'italic',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  viewMetricsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 6,
+  },
+  viewMetricsText: {
+    fontSize: 12,
+    color: '#2563eb',
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  trackProgressCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  trackProgressItem: {
+    marginBottom: 15,
+  },
+  trackProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  trackProgressSubject: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  trackProgressPercent: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  trackProgressBar: {
+    height: 6,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 3,
+    marginBottom: 6,
+  },
+  trackProgressFill: {
+    height: '100%',
+    backgroundColor: '#2563eb',
+    borderRadius: 3,
+  },
+  trackProgressText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  noProgress: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  floatingActionButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    borderRadius: 25,
+    backgroundColor: '#10B981',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  fabText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+    marginLeft: 8,
   },
 });

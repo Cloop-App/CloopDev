@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const dotenv = require('dotenv')
 const path = require('path')
+const { checkAndProcessPendingGenerations } = require('./services/content-pipeline')
 
 dotenv.config({ path: path.join(__dirname, '.env') })
 
@@ -27,14 +28,42 @@ app.use(express.json())
 
 // Mount API routes
 app.use('/api/signup', require('./api/signup/signup'))
+app.use('/api/signup/options', require('./api/signup/options'))
 app.use('/api/login', require('./api/login/login'))
-// Profile route
+// Profile routes
 app.use('/api/profile', require('./api/profile/get-profile'))
 app.use('/api/profile', require('./api/profile/update'))
+app.use('/api/profile', require('./api/profile/manage-subjects'))
+app.use('/api/profile/chat-history', require('./api/profile/chat-history'))
+app.use('/api/profile/metrics', require('./api/profile/metrics'))
+// Chapters and Topics routes
+app.use('/api/chapters', require('./api/chapters/chapters'))
+app.use('/api/topics', require('./api/topics/topics'))
+// Topic Chat routes
+app.use('/api/topic-chats', require('./api/topic-chats/topic-chats'))
+// Normal Chat routes
+app.use('/api/normal-chat', require('./api/normal-chat/normal-chat'))
+// Content Generation (AI Pipeline) routes
+app.use('/api/content-generation', require('./api/content-generation/content-generation'))
 
 const PORT = process.env.PORT || 4000
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
 	console.log(`Backend server listening on port ${PORT}`)
+	
+	// Check and process pending content generation on startup
+	console.log('\nInitializing AI Pipeline...')
+	try {
+		// Run in background to not block server startup
+		setTimeout(async () => {
+			try {
+				await checkAndProcessPendingGenerations()
+			} catch (error) {
+				console.error('Error in startup pipeline check:', error)
+			}
+		}, 3000) // Wait 3 seconds after server starts
+	} catch (error) {
+		console.error('Failed to initialize pipeline check:', error)
+	}
 })
 
 module.exports = app

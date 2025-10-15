@@ -1,63 +1,118 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { signupUser } from '../../src/client/signup/signup';
+import { signupUser, getSignupOptions } from '../../src/client/signup/signup';
 
 
-// Define the structure for questions, including types and options
-const questions = [
+// Initial questions structure - options will be loaded dynamically
+const getQuestionsTemplate = () => [
   { key: 'name', bot: 'Welcome! To get started, what is your full name?', required: true, type: 'text' },
   { key: 'email', bot: 'Great, {name}! What is your email address?', required: true, type: 'text' },
   { key: 'phone', bot: 'Got it. You can enter a phone number, or just press send to skip.', required: false, type: 'text' },
-  { key: 'grade_level', bot: 'Which class or grade are you in?', required: true, type: 'text' },
-  { 
-    key: 'board', 
-    bot: 'Which Board are you studying in?', 
-    required: true, 
-    type: 'single-choice', 
-    options: ['CBSE', 'ICSE', 'SSC'] 
-  },
-  { 
-    key: 'subjects', 
-    bot: 'Select your subjects.', 
-    required: false, 
-    type: 'multi-choice', 
-    options: ['Science', 'Math', 'History', 'Geography', 'Computers'] 
-  },
-  { 
-    key: 'preferred_language', 
-    bot: 'What is your preferred language?', 
-    required: false, 
-    type: 'single-choice', 
-    options: ['English', 'Hindi', 'Marathi'] 
-  },
-  { 
-    key: 'study_goal', 
-    bot: 'Finally, what is your main study goal?', 
-    required: false, 
-    type: 'single-choice', 
-    options: ['Better scores', 'Better Knowledge', 'Finish Homework'] 
-  },
+  { key: 'grade_level', bot: 'Which class or grade are you in?', required: true, type: 'single-choice', options: [] },
+  { key: 'board', bot: 'Which Board are you studying in?', required: true, type: 'single-choice', options: [] },
+  { key: 'subjects', bot: 'Select your subjects.', required: false, type: 'multi-choice', options: [] },
+  { key: 'preferred_language', bot: 'What is your preferred language?', required: false, type: 'single-choice', options: [] },
+  { key: 'study_goal', bot: 'Finally, what is your main study goal?', required: false, type: 'single-choice', options: ['Better scores', 'Better Knowledge', 'Finish Homework'] },
 ];
 
 export default function SignupScreen() {
   const router = useRouter();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [formData, setFormData] = useState<Record<string, any>>({});
-  const [messages, setMessages] = useState<Array<{ id: number; text: string; sender: string; type?: string }>>([
-    { id: 1, text: questions[0].bot, sender: 'bot' }
-  ]);
+  const [questions, setQuestions] = useState(getQuestionsTemplate());
+  const [messages, setMessages] = useState<Array<{ id: number; text: string; sender: string; type?: string }>>([]);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [optionsData, setOptionsData] = useState<any>(null); // Store options with IDs
   const scrollRef = useRef<ScrollView | null>(null);
 
   const isLastQuestion = currentQuestionIndex >= questions.length;
   const currentQuestion = questions[currentQuestionIndex];
 
+  // Load signup options on component mount
+  useEffect(() => {
+    const loadSignupOptions = async () => {
+      try {
+        setIsLoadingOptions(true);
+        const options = await getSignupOptions();
+        setOptionsData(options); // Store the full options data
+        
+        const updatedQuestions = getQuestionsTemplate();
+        
+        // Update grade_level options
+        const gradeIndex = updatedQuestions.findIndex(q => q.key === 'grade_level');
+        if (gradeIndex !== -1) {
+          updatedQuestions[gradeIndex].options = options.grades.map(grade => 
+            `${grade.level}${grade.description ? ` - ${grade.description}` : ''}`
+          );
+        }
+        
+        // Update board options
+        const boardIndex = updatedQuestions.findIndex(q => q.key === 'board');
+        if (boardIndex !== -1) {
+          updatedQuestions[boardIndex].options = options.boards.map(board => board.name);
+        }
+        
+        // Update subjects options
+        const subjectIndex = updatedQuestions.findIndex(q => q.key === 'subjects');
+        if (subjectIndex !== -1) {
+          updatedQuestions[subjectIndex].options = options.subjects.map(subject => subject.name);
+        }
+        
+        // Update preferred_language options
+        const languageIndex = updatedQuestions.findIndex(q => q.key === 'preferred_language');
+        if (languageIndex !== -1) {
+          updatedQuestions[languageIndex].options = options.languages.map(language => language.name);
+        }
+        
+        setQuestions(updatedQuestions);
+        // Add the first message after options are loaded
+        setMessages([{ id: 1, text: updatedQuestions[0].bot, sender: 'bot' }]);
+      } catch (error) {
+        console.error('Failed to load signup options:', error);
+        Alert.alert('Error', 'Failed to load signup options. Please try again.');
+      } finally {
+        setIsLoadingOptions(false);
+      }
+    };
+
+    loadSignupOptions();
+  }, []);
+
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
+
+  // Helper functions to convert display names to IDs
+  const getGradeId = (gradeDisplay: string) => {
+    if (!optionsData?.grades) return null;
+    const gradeLevel = parseInt(gradeDisplay.split(' ')[0]);
+    const grade = optionsData.grades.find((g: any) => g.level === gradeLevel);
+    return grade?.id || null;
+  };
+
+  const getBoardId = (boardName: string) => {
+    if (!optionsData?.boards) return null;
+    const board = optionsData.boards.find((b: any) => b.name === boardName);
+    return board?.id || null;
+  };
+
+  const getLanguageId = (languageName: string) => {
+    if (!optionsData?.languages) return null;
+    const language = optionsData.languages.find((l: any) => l.name === languageName);
+    return language?.id || null;
+  };
+
+  const getSubjectIds = (subjectNames: string[]) => {
+    if (!optionsData?.subjects) return [];
+    return subjectNames.map(name => {
+      const subject = optionsData.subjects.find((s: any) => s.name === name);
+      return subject?.id;
+    }).filter(id => id !== undefined);
+  };
 
   const addMessage = (text: string, sender: string, type = 'normal') => {
     setMessages(prev => [...prev, { id: Date.now(), text, sender, type }]);
@@ -88,15 +143,15 @@ export default function SignupScreen() {
         name: finalFormData.name || '',
         email: finalFormData.email || '',
         phone: finalFormData.phone || undefined,
-        grade_level: finalFormData.grade_level || undefined,
-        board: finalFormData.board || undefined,
-        subjects: finalFormData.subjects || [],
-        preferred_language: finalFormData.preferred_language || undefined,
+        grade_level: finalFormData.grade_level ? getGradeId(finalFormData.grade_level) : undefined,
+        board: finalFormData.board ? getBoardId(finalFormData.board) : undefined,
+        subjects: finalFormData.subjects ? getSubjectIds(finalFormData.subjects) : [],
+        preferred_language: finalFormData.preferred_language ? getLanguageId(finalFormData.preferred_language) : undefined,
         study_goal: finalFormData.study_goal || undefined,
       };
       await signupUser(payload as any);
-      addMessage('Success! Your account has been created. Redirecting...', 'bot');
-      setTimeout(() => router.push('/home/home'), 1200);
+      addMessage('Success! Your account has been created. Please sign in to continue...', 'bot');
+      setTimeout(() => router.push('/login-sigup/login'), 1500);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       addMessage(`Signup failed: ${errorMessage}`, 'bot', 'error');
@@ -202,50 +257,59 @@ export default function SignupScreen() {
         <Text style={styles.title}>Create Your Account</Text>
       </View>
 
-      <ScrollView ref={scrollRef} style={styles.chatArea} contentContainerStyle={styles.chatAreaContent}>
-        {messages.map((msg) => (
-          <View key={msg.id} style={[styles.messageWrapper, msg.sender === 'user' ? styles.userMessage : styles.botMessage]}>
-            <View style={[
-                styles.messageBubble, 
-                msg.sender === 'user' ? styles.userBubble : styles.botBubble,
-                msg.type === 'error' ? styles.errorBubble : null
-            ]}>
-              <Text style={[
-                  styles.messageText,
-                  msg.sender === 'user' ? styles.userMessageText : styles.botMessageText
-              ]}>{msg.text}</Text>
+      {isLoadingOptions ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Loading signup options...</Text>
+        </View>
+      ) : (
+        <>
+          <ScrollView ref={scrollRef} style={styles.chatArea} contentContainerStyle={styles.chatAreaContent}>
+            {messages.map((msg) => (
+              <View key={msg.id} style={[styles.messageWrapper, msg.sender === 'user' ? styles.userMessage : styles.botMessage]}>
+                <View style={[
+                    styles.messageBubble, 
+                    msg.sender === 'user' ? styles.userBubble : styles.botBubble,
+                    msg.type === 'error' ? styles.errorBubble : null
+                ]}>
+                  <Text style={[
+                      styles.messageText,
+                      msg.sender === 'user' ? styles.userMessageText : styles.botMessageText
+                  ]}>{msg.text}</Text>
+                </View>
+              </View>
+            ))}
+            {renderCurrentOptions()}
+            {isLoading && <ActivityIndicator style={{ marginTop: 20 }} size="large" color="#10B981" />}
+          </ScrollView>
+
+          <View style={styles.inputSection}>
+            {!isLastQuestion && currentQuestion?.type === 'text' && (
+              <View style={styles.inputForm}>
+                <TextInput
+                  style={styles.chatInput}
+                  placeholder="Type your answer..."
+                  placeholderTextColor="#9CA3AF"
+                  value={input}
+                  onChangeText={setInput}
+                  editable={!isLoading}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSendText}
+                />
+                <TouchableOpacity style={styles.sendButton} onPress={handleSendText} disabled={isLoading}>
+                   <Text style={styles.sendIcon}>➤</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.bottomLinkContainer}>
+              <TouchableOpacity onPress={() => router.push('/login-sigup/login')}>
+                <Text style={styles.signinLink}>Already have an account? Sign in</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        ))}
-        {renderCurrentOptions()}
-        {isLoading && <ActivityIndicator style={{ marginTop: 20 }} size="large" color="#10B981" />}
-      </ScrollView>
-
-      <View style={styles.inputSection}>
-        {!isLastQuestion && currentQuestion?.type === 'text' && (
-          <View style={styles.inputForm}>
-            <TextInput
-              style={styles.chatInput}
-              placeholder="Type your answer..."
-              placeholderTextColor="#9CA3AF"
-              value={input}
-              onChangeText={setInput}
-              editable={!isLoading}
-              returnKeyType="send"
-              onSubmitEditing={handleSendText}
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={handleSendText} disabled={isLoading}>
-               <Text style={styles.sendIcon}>➤</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.bottomLinkContainer}>
-          <TouchableOpacity onPress={() => router.push('/login-sigup/login')}>
-            <Text style={styles.signinLink}>Already have an account? Sign in</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        </>
+      )}
     </View>
   );
 }
@@ -272,6 +336,18 @@ const styles = StyleSheet.create({
   },
   logoText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   title: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
   chatArea: { flex: 1 },
   chatAreaContent: { padding: 16, paddingBottom: 24 },
   messageWrapper: { marginBottom: 12, maxWidth: '85%' },

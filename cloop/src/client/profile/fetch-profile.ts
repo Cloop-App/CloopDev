@@ -1,3 +1,18 @@
+export interface UserSubject {
+  id: number;
+  subject_id: number;
+  total_chapters: number;
+  completed_chapters: number;
+  completion_percent: number;
+  created_at: string;
+  subject: {
+    id: number;
+    name: string;
+    code?: string;
+    category?: string;
+  };
+}
+
 export interface UserProfile {
   user_id: number;
   name: string;
@@ -5,6 +20,7 @@ export interface UserProfile {
   grade_level: string;
   board: string;
   subjects: string[];
+  user_subjects?: UserSubject[];
   preferred_language: string;
   study_goal: string;
   avatar_choice?: string;

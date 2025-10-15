@@ -10,6 +10,7 @@ interface AuthContextType extends AuthState {
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,23 +33,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user: null,
     isAuthenticated: false,
   });
+  const [isLoading, setIsLoading] = useState(true);
   
   const authService = AuthService.getInstance();
 
   useEffect(() => {
     // Initialize auth state
-    const initialState = authService.getAuthState();
-    setAuthState(initialState);
+    const initialize = async () => {
+      const initialState = authService.getAuthState();
+      setAuthState(initialState);
 
-    // Subscribe to auth state changes
-    const unsubscribe = authService.subscribe((newState) => {
-      setAuthState(newState);
+      // Subscribe to auth state changes
+      const unsubscribe = authService.subscribe((newState) => {
+        setAuthState(newState);
+      });
+
+      // Refresh auth state to load from storage
+      await authService.refreshAuthState();
+      setIsLoading(false);
+
+      return unsubscribe;
+    };
+
+    let unsubscribe: (() => void) | undefined;
+    
+    initialize().then((unsub) => {
+      unsubscribe = unsub;
     });
 
-    // Refresh auth state to load from storage
-    authService.refreshAuthState();
-
-    return unsubscribe;
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   const login = async (token: string, user: User): Promise<void> => {
@@ -67,6 +84,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     <AuthContext.Provider
       value={{
         ...authState,
+        isLoading,
         login,
         logout,
         refreshAuth,

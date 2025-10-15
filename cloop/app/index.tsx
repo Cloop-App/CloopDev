@@ -1,17 +1,47 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 
 export default function Index() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      router.replace('/home/home');
+    // Set mounted flag after component is mounted
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted && !isLoading && isAuthenticated) {
+      // Add small delay to ensure router is ready
+      const timer = setTimeout(() => {
+        try {
+          router.replace('/home/home');
+        } catch (error) {
+          console.error('Navigation error:', error);
+          // Fallback navigation
+          window.location.href = '/home/home';
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, isMounted, isLoading]);
+
+  // Show loading during auth initialization
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+        <View style={styles.card}>
+          <View style={styles.logo}><Text style={styles.logoText}>C</Text></View>
+          <Text style={styles.brand}>Cloop</Text>
+          <Text style={[styles.tag, { marginTop: 20 }]}>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
