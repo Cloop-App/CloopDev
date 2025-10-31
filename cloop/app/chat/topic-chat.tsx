@@ -358,6 +358,11 @@ export default function TopicChatScreen() {
         });
       }
 
+      // If server returned updated goals, refresh the goals state so progress bar updates
+      if (data.goals) {
+        setGoals(data.goals || []);
+      }
+
     } catch (err) {
       console.error('Error sending option selection:', err);
       // fallback: send option as a normal message

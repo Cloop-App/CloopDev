@@ -5,6 +5,14 @@ const { generateTopicChatResponse, generateTopicGreeting, generateTopicGoals } =
 
 const { PrismaClient } = require('../../generated/prisma')
 const prisma = new PrismaClient()
+// Configuration: max questions per goal before moving on
+const MAX_QUESTIONS_PER_GOAL = 2
+
+// Helper to normalize text for duplicate detection
+function normalizeText(s) {
+	if (!s || typeof s !== 'string') return ''
+	return s.replace(/\s+/g, ' ').trim().toLowerCase()
+}
 
 // GET /api/topic-chats/:topicId
 // Fetch all chat messages for a specific topic
@@ -378,6 +386,31 @@ router.post('/:topicId/message', authenticateToken, async (req, res) => {
 			}
 		}
 
+		// Duplicate-question fallback (retry once) — if the model returns a question identical
+		// to the last AI question in chatHistory, ask it again with an explicit instruction
+		try {
+			const lastAi = chatHistory.slice().reverse().find(m => m.sender === 'ai')
+			if (aiResponse && Array.isArray(aiResponse.messages) && lastAi) {
+				const candidate = aiResponse.messages.find(m => m.message && m.message.includes('?')) || aiResponse.messages[0]
+				if (candidate && candidate.message) {
+					const candText = normalizeText(candidate.message)
+					const lastText = normalizeText(lastAi.message)
+					if (candText && lastText && candText === lastText) {
+						// Retry once with a firm instruction in the history
+						chatHistory.push({ sender: 'system', message: 'Do NOT repeat the previous AI question. Rephrase or ask a different sub-question about the same goal.' })
+						try {
+							const retryResp = await generateTopicChatResponse(message || 'User shared a file', topic.title, topic.content || 'No additional content provided', chatHistory, currentGoal, topicGoals)
+							if (retryResp) aiResponse = retryResp
+						} catch (retryErr) {
+							console.error('Retry for duplicate question failed:', retryErr)
+						}
+					}
+				}
+			}
+		} catch (e) {
+			console.error('Error during duplicate-question fallback check:', e)
+		}
+
 		// Edge case: some model outputs send the correction as an AI message with message_type 'user_correction'
 		// instead of as aiResponse.user_correction. Detect that and apply it to the user's placeholder.
 		if (!aiResponse.user_correction && Array.isArray(aiResponse.messages)) {
@@ -583,9 +616,9 @@ router.post('/:topicId/message', authenticateToken, async (req, res) => {
 							const numQ = prog.num_questions || 0;
 							const numC = prog.num_correct || 0;
 							const percent = numQ > 0 ? Math.round((numC / numQ) * 100) : 0;
-							const REQUIRED_QUESTIONS = 3;
 							const REQUIRED_PERCENT = 80;
-							const markCompleted = ((numQ >= REQUIRED_QUESTIONS && percent >= REQUIRED_PERCENT) || percent >= REQUIRED_PERCENT);
+							// Mark completed if percent >= threshold OR we've reached the max allowed questions per goal
+							const markCompleted = (percent >= REQUIRED_PERCENT) || (numQ >= MAX_QUESTIONS_PER_GOAL);
 							if (markCompleted && !prog.is_completed) {
 								await prisma.chat_goal_progress.update({ where: { id: prog.id }, data: { is_completed: true } });
 							}
@@ -617,6 +650,29 @@ router.post('/:topicId/message', authenticateToken, async (req, res) => {
 						aiResponse = { messages: [ { message: "I'm having trouble right now.", message_type: 'text' } ] };
 					}
 
+					// Duplicate-question fallback in option flow (retry once)
+					try {
+						const lastAi = chatHistory.slice().reverse().find(m => m.sender === 'ai');
+						if (aiResponse && Array.isArray(aiResponse.messages) && lastAi) {
+							const candidate = aiResponse.messages.find(m => m.message && m.message.includes('?')) || aiResponse.messages[0];
+							if (candidate && candidate.message) {
+								const candText = normalizeText(candidate.message);
+								const lastText = normalizeText(lastAi.message);
+								if (candText && lastText && candText === lastText) {
+									chatHistory.push({ sender: 'system', message: 'Do NOT repeat the previous AI question. Rephrase or ask a different sub-question about the same goal.' });
+									try {
+										const retryResp = await generateTopicChatResponse(option, topic.title, topic.content || 'No additional content provided', chatHistory, currentGoal, topicGoals);
+										if (retryResp) aiResponse = retryResp;
+									} catch (retryErr) {
+										console.error('Retry for duplicate question in option flow failed:', retryErr);
+									}
+								}
+							}
+						}
+					} catch (e) {
+						console.error('Error during duplicate-question fallback check (option):', e);
+					}
+
 					// Save AI messages returned
 					const aiMessages = [];
 					for (let i = 0; i < (aiResponse.messages || []).length; i++) {
@@ -640,7 +696,20 @@ router.post('/:topicId/message', authenticateToken, async (req, res) => {
 						aiMessages.push(savedAiMessage);
 					}
 
-					return res.status(201).json({ aiMessages, userCorrection: aiResponse.user_correction || null, feedback: aiResponse.feedback || null });
+					// Also return updated goals so frontend can refresh the progress bar
+					const updatedGoalsForClient = await prisma.topic_goals.findMany({
+						where: { topic_id: parseInt(topicId) },
+						orderBy: { order: 'asc' },
+						include: {
+							chat_goal_progress: {
+								where: { user_id: user_id },
+								orderBy: { created_at: 'desc' },
+								take: 1
+							}
+						}
+					});
+
+					return res.status(201).json({ aiMessages, userCorrection: aiResponse.user_correction || null, feedback: aiResponse.feedback || null, goals: updatedGoalsForClient });
 				} catch (err) {
 					console.error('Error handling option selection:', err);
 					return res.status(500).json({ error: 'Server error while processing option' });

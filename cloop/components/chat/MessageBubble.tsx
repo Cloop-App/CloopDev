@@ -16,6 +16,7 @@ interface MessageBubbleProps {
   isCorrect?: boolean;
   sessionSummary?: any;
   chatId?: number;
+  emoji?: string;
   onOptionSelect?: (option: string, chatId?: number) => void;
 }
 
@@ -33,6 +34,7 @@ export default function MessageBubble({
   isCorrect,
   sessionSummary,
   chatId,
+  emoji,
   onOptionSelect
 }: MessageBubbleProps) {
   const isUser = sender === 'user';
