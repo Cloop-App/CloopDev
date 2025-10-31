@@ -274,6 +274,17 @@ export default function HomeScreen() {
 
 
 
+        {/* Live Agentic Tutor Button */}
+        <View style={styles.section}>
+          <Pressable 
+            style={styles.fullWidthActionButton}
+            onPress={() => router.push('/chat/normal-chat' as any)}
+          >
+            <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
+            <Text style={styles.actionText}>Live Agentic Tutor</Text>
+          </Pressable>
+        </View>
+
         {/* Track Progress */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -313,17 +324,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-
-      {/* Floating Action Button for Cloop Help */}
-      <Pressable 
-        style={styles.floatingActionButton}
-        onPress={() => router.push('/chat/normal-chat' as any)}
-      >
-        <View style={styles.fabContainer}>
-          <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
-          <Text style={styles.fabText}>Live Query</Text>
-        </View>
-      </Pressable>
 
       {renderSidebar()}
     </SafeAreaView>
@@ -676,29 +676,5 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     fontStyle: 'italic',
-  },
-  floatingActionButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    borderRadius: 25,
-    backgroundColor: '#10B981',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  fabText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 8,
   },
 });

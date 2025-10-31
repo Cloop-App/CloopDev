@@ -4,9 +4,50 @@ export interface TopicChatMessage {
   id: number;
   sender: 'user' | 'ai';
   message?: string;
+  message_type?: string; // text, options, formula, video, session_summary
+  options?: string[];
+  diff_html?: string;
   file_url?: string;
   file_type?: string;
   created_at: string;
+  // NEW: Feedback fields for error correction
+  feedback?: {
+    is_correct: boolean;
+    emoji?: string;
+    bubble_color?: 'green' | 'red' | 'yellow';
+    praise?: string;
+    corrected_answer?: string;
+    diff_html?: string;
+    explanation?: string;
+    error_type?: string;
+    score_percent?: number;
+  };
+  // NEW: Session summary for end-of-session reports
+  session_summary?: {
+    total_questions: number;
+    correct_answers: number;
+    incorrect_answers: number;
+    star_rating: number; // 1-3 stars
+    error_types: Record<string, number>;
+    learning_gaps: string[];
+    recommendations: string[];
+    performance_percent: number;
+  };
+}
+
+export interface TopicGoal {
+  id: number;
+  title: string;
+  description?: string;
+  order?: number;
+  // backend now returns chat_goal_progress
+  chat_goal_progress?: Array<{
+    score_percent?: number;
+    is_completed?: boolean;
+    num_questions?: number;
+    num_correct?: number;
+    created_at?: string;
+  }>;
 }
 
 export interface TopicChatDetails {
@@ -15,6 +56,7 @@ export interface TopicChatDetails {
   content?: string;
   is_completed: boolean;
   completion_percent: number;
+  time_spent_seconds?: number; // NEW: Track time spent on topic
   chapter: {
     id: number;
     title: string;
@@ -30,11 +72,66 @@ export interface TopicChatDetails {
 export interface TopicChatResponse {
   topic: TopicChatDetails;
   messages: TopicChatMessage[];
+  goals: TopicGoal[];
+  rawProcesses?: Array<{
+    id: number;
+    chat_id: number;
+    user_message: string;
+    corrected_message?: string | null;
+    ai_response?: string | null;
+    feedback?: any;
+    created_at?: string;
+    updated_at?: string;
+  }>
+  initialGreeting?: Array<{
+    message: string;
+    message_type: string;
+    options?: string[];
+  }> | null;
 }
 
 export interface SendMessageResponse {
   userMessage: TopicChatMessage;
-  aiMessage: TopicChatMessage;
+  aiMessages: TopicChatMessage[];
+  // Backwards-compatible alias: some code expects `messages`
+  messages?: TopicChatMessage[];
+  // NEW: Enhanced feedback with error correction
+  feedback?: {
+    is_correct: boolean;
+    emoji?: string;
+    bubble_color?: 'green' | 'red' | 'yellow';
+    praise?: string;
+    corrected_answer?: string;
+    diff_html?: string;
+    explanation?: string;
+    error_type?: string;
+    score_percent?: number;
+  } | null;
+  // If AI performed an explicit correction to the user's answer
+  userCorrection?: {
+    message_type?: string;
+    diff_html?: string;
+    complete_answer?: string;
+    options?: string[];
+    feedback?: {
+      is_correct?: boolean;
+      bubble_color?: 'green' | 'red' | 'yellow';
+      error_type?: string;
+      score_percent?: number;
+      explanation?: string;
+    } | null;
+  } | null;
+  // NEW: Session summary when session ends
+  session_summary?: {
+    total_questions: number;
+    correct_answers: number;
+    incorrect_answers: number;
+    star_rating: number;
+    error_types: Record<string, number>;
+    learning_gaps: string[];
+    recommendations: string[];
+    performance_percent: number;
+  } | null;
 }
 
 /**
@@ -85,6 +182,7 @@ export const sendTopicChatMessage = async (
     message?: string;
     file_url?: string;
     file_type?: string;
+    session_time_seconds?: number;
   },
   opts?: { 
     userId?: number; 

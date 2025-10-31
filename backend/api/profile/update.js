@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
 const CurriculumAutoTrigger = require('../../services/curriculum-auto-trigger');
+const { saveExpoPushToken } = require('../../services/notifications');
 
 const { PrismaClient } = require('../../generated/prisma');
 const prisma = new PrismaClient();
@@ -53,8 +54,6 @@ router.put('/update', authenticateToken, async (req, res) => {
       }
     });
 
-    return res.json({ success: true, user: updatedUser });
-    
     // Auto-trigger curriculum generation if profile is complete
     CurriculumAutoTrigger.handleProfileUpdate(user_id, {
       grade_level,
@@ -66,9 +65,37 @@ router.put('/update', authenticateToken, async (req, res) => {
       console.error('Auto-trigger curriculum generation failed:', error);
     });
 
+    return res.json({ success: true, user: updatedUser });
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/profile/push-token
+router.post('/push-token', authenticateToken, async (req, res) => {
+  const { expoPushToken } = req.body;
+  const user_id = req.user?.user_id;
+
+  if (!user_id) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  if (!expoPushToken) {
+    return res.status(400).json({ error: 'Expo push token is required' });
+  }
+
+  try {
+    await saveExpoPushToken(user_id, expoPushToken);
+    
+    return res.json({ 
+      success: true, 
+      message: 'Push token saved successfully' 
+    });
+  } catch (error) {
+    console.error('Error saving push token:', error);
+    return res.status(500).json({ error: 'Failed to save push token' });
   }
 });
 

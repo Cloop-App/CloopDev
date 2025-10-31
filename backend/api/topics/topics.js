@@ -61,7 +61,8 @@ router.get('/:chapterId', authenticateToken, async (req, res) => {
 				completion_percent: true,
 				subject_id: true,
 				chapter_id: true,
-				user_id: true
+				user_id: true,
+				time_spent_seconds: true
 			}
 		})
 

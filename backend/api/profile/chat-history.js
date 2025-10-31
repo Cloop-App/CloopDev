@@ -15,45 +15,40 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Get distinct topics that user has chatted about
-    const chatHistory = await prisma.topic_chats.findMany({
-      where: {
-        user_id: user_id
-      },
-      select: {
-        topic_id: true,
-        created_at: true,
-        topics: {
-          select: {
-            id: true,
-            title: true,
-            subjects: {
-              select: {
-                name: true
-              }
-            },
-            chapters: {
-              select: {
-                title: true
+    // Get distinct topics that user has chatted about via chat_goal_progress -> topic_goals -> topics
+    const progressEntries = await prisma.chat_goal_progress.findMany({
+      where: { user_id: user_id },
+      include: {
+        topic_goals: {
+          include: {
+            topics: {
+              include: {
+                subject_id_rel: { select: { name: true } },
+                chapter_id_rel: { select: { title: true } }
               }
             }
           }
         }
       },
-      orderBy: {
-        created_at: 'desc'
-      },
-      distinct: ['topic_id']
+      orderBy: { created_at: 'desc' }
     });
 
-    // Format the response
-    const formattedHistory = chatHistory.map(chat => ({
-      topic_id: chat.topic_id,
-      title: chat.topics.title,
-      subject: chat.topics.subjects.name,
-      chapter: chat.topics.chapters.title,
-      last_activity: chat.created_at
-    }));
+    // De-duplicate by topic_id while preserving latest activity
+    const seen = new Set();
+    const formattedHistory = [];
+    for (const entry of progressEntries) {
+      const topic = entry.topic_goals?.topics;
+      if (!topic) continue;
+      if (seen.has(topic.id)) continue;
+      seen.add(topic.id);
+      formattedHistory.push({
+        topic_id: topic.id,
+        title: topic.title,
+        subject: topic.subject_id_rel?.name || null,
+        chapter: topic.chapter_id_rel?.title || null,
+        last_activity: entry.created_at
+      });
+    }
 
     return res.status(200).json({
       chatHistory: formattedHistory

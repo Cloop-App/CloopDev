@@ -34,6 +34,7 @@ export interface Topic {
   subject_id: number;
   chapter_id: number;
   user_id: number;
+  time_spent_seconds?: number;
 }
 
 export interface ChapterDetails {

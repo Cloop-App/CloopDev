@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const { authenticateToken } = require('../../middleware/auth')
-const { generateTopicChatResponse } = require('../../services/openai')
+const { generateTopicChatResponse, generateTopicGreeting, generateTopicGoals } = require('../../services/topic_chat')
 
 const { PrismaClient } = require('../../generated/prisma')
 const prisma = new PrismaClient()
@@ -11,6 +11,12 @@ const prisma = new PrismaClient()
 router.get('/:topicId', authenticateToken, async (req, res) => {
 	let user_id = req.user?.user_id
 	const { topicId } = req.params
+	const query_user_id = req.query.user_id ? parseInt(req.query.user_id) : null
+
+	// Use query user_id if authenticated user matches
+	if (query_user_id && query_user_id === user_id) {
+		user_id = query_user_id
+	}
 
 	// For production, always require authenticated user
 	if (!user_id) {
@@ -29,14 +35,14 @@ router.get('/:topicId', authenticateToken, async (req, res) => {
 				user_id: user_id
 			},
 			include: {
-				chapters: {
+				chapter_id_rel: {
 					select: {
 						id: true,
 						title: true,
 						subject_id: true
 					}
 				},
-				subjects: {
+				subject_id_rel: {
 					select: {
 						id: true,
 						name: true,
@@ -50,11 +56,24 @@ router.get('/:topicId', authenticateToken, async (req, res) => {
 			return res.status(403).json({ error: 'Topic not found or user does not have access' })
 		}
 
-		// Fetch chat messages for this topic
-		const chatMessages = await prisma.topic_chats.findMany({
+		// Fetch topic goals (we need their ids to find related admin_chat messages)
+		const topicGoalsForIds = await prisma.topic_goals.findMany({
+			where: { topic_id: parseInt(topicId) },
+			select: { id: true },
+		})
+
+		const topicGoalIds = topicGoalsForIds.map(g => g.id)
+
+		// Fetch chat messages for this topic via admin_chat -> chat_goal_progress -> topic_goals
+		// admin_chat is the new central chat table; chat_goal_progress links chats to topic goals
+		const chatMessages = await prisma.admin_chat.findMany({
 			where: {
-				topic_id: parseInt(topicId),
-				user_id: user_id
+				chat_goal_progress: {
+					some: {
+						goal_id: { in: topicGoalIds },
+						user_id: user_id
+					}
+				}
 			},
 			orderBy: {
 				created_at: 'asc'
@@ -63,9 +82,109 @@ router.get('/:topicId', authenticateToken, async (req, res) => {
 				id: true,
 				sender: true,
 				message: true,
-				file_url: true,
-				file_type: true,
+				message_type: true,
+				options: true,
+				diff_html: true,
+				images: true,
+				videos: true,
+				links: true,
 				created_at: true
+			}
+		})
+
+		// Fetch raw chat_process entries linked to these admin_chat rows (these store user raw answers)
+		const rawProcesses = await prisma.chat_process.findMany({
+			where: {
+				admin_chat: {
+					chat_goal_progress: {
+						some: {
+							goal_id: { in: topicGoalIds },
+							user_id: user_id
+						}
+					}
+				}
+			},
+			orderBy: {
+				created_at: 'asc'
+			},
+			select: {
+				id: true,
+				chat_id: true,
+				user_message: true,
+				corrected_message: true,
+				ai_response: true,
+				feedback: true,
+				created_at: true,
+				updated_at: true
+			}
+		})
+
+		// Fetch topic goals with progress info
+		const topicGoals = await prisma.topic_goals.findMany({
+			where: {
+				topic_id: parseInt(topicId)
+			},
+			orderBy: {
+				order: 'asc'
+			},
+			include: {
+				chat_goal_progress: {
+					where: {
+						user_id: user_id
+					},
+					orderBy: {
+						created_at: 'desc'
+					},
+					take: 1
+				}
+			}
+		})
+
+		// If no messages and no goals, generate initial greeting
+		let needsGreeting = chatMessages.length === 0
+		let initialGreeting = null
+		
+		if (needsGreeting) {
+			// Generate greeting with goals context
+			const greetingData = await generateTopicGreeting(topic.title, topic.content, topicGoals)
+			initialGreeting = greetingData.messages
+		}
+
+		// If no goals exist, generate them
+		if (topicGoals.length === 0) {
+			const goalsData = await generateTopicGoals(topic.title, topic.content)
+			
+			// Save generated goals
+			for (const goal of goalsData.goals) {
+				await prisma.topic_goals.create({
+					data: {
+						topic_id: parseInt(topicId),
+						title: goal.title,
+						description: goal.description,
+						order: goal.order
+					}
+				})
+			}
+		}
+
+		// Refetch goals after potential creation
+		const updatedGoals = await prisma.topic_goals.findMany({
+			where: {
+				topic_id: parseInt(topicId)
+			},
+			orderBy: {
+				order: 'asc'
+			},
+			include: {
+				chat_goal_progress: {
+					where: {
+						user_id: user_id
+					},
+					orderBy: {
+						created_at: 'desc'
+					},
+					take: 1
+				}
 			}
 		})
 
@@ -76,10 +195,14 @@ router.get('/:topicId', authenticateToken, async (req, res) => {
 				content: topic.content,
 				is_completed: topic.is_completed,
 				completion_percent: topic.completion_percent,
-				chapter: topic.chapters,
-				subject: topic.subjects
+				time_spent_seconds: topic.time_spent_seconds || 0,
+					chapter: topic.chapter_id_rel,
+					subject: topic.subject_id_rel
 			},
-			messages: chatMessages
+			messages: chatMessages,
+			rawProcesses: rawProcesses,
+			goals: updatedGoals,
+			initialGreeting: initialGreeting
 		})
 	} catch (err) {
 		console.error('Error fetching topic chat messages:', err)
@@ -92,7 +215,7 @@ router.get('/:topicId', authenticateToken, async (req, res) => {
 router.post('/:topicId/message', authenticateToken, async (req, res) => {
 	let user_id = req.user?.user_id
 	const { topicId } = req.params
-	const { message, file_url, file_type } = req.body
+	const { message, file_url, file_type, session_time_seconds } = req.body
 
 	// For production, always require authenticated user
 	if (!user_id) {
@@ -114,29 +237,40 @@ router.post('/:topicId/message', authenticateToken, async (req, res) => {
 				id: parseInt(topicId),
 				user_id: user_id
 			},
-			include: {
-				chapters: {
-					select: {
-						title: true
-					}
-				},
-				subjects: {
-					select: {
-						name: true
+				include: {
+					chapter_id_rel: {
+						select: {
+							title: true
+						}
+					},
+					subject_id_rel: {
+						select: {
+							name: true
+						}
 					}
 				}
-			}
 		})
 
 		if (!topic) {
 			return res.status(403).json({ error: 'Topic not found or user does not have access' })
 		}
 
-		// Get recent chat history for context
-		const recentMessages = await prisma.topic_chats.findMany({
+		// Get recent chat history for context (from admin_chat linked via chat_goal_progress)
+		// First get goal ids for this topic
+		const topicGoalsForHistory = await prisma.topic_goals.findMany({
+			where: { topic_id: parseInt(topicId) },
+			select: { id: true }
+		})
+		const goalIdsForHistory = topicGoalsForHistory.map(g => g.id)
+
+		const recentMessages = await prisma.admin_chat.findMany({
 			where: {
-				topic_id: parseInt(topicId),
-				user_id: user_id
+				chat_goal_progress: {
+					some: {
+						goal_id: { in: goalIdsForHistory },
+						user_id: user_id
+					}
+				}
 			},
 			orderBy: {
 				created_at: 'desc'
@@ -144,70 +278,507 @@ router.post('/:topicId/message', authenticateToken, async (req, res) => {
 			take: 10,
 			select: {
 				sender: true,
-				message: true
+				message: true,
+				message_type: true
 			}
 		})
 
 		// Reverse to get chronological order
 		const chatHistory = recentMessages.reverse()
 
-		// Create user message
-		const userMessage = await prisma.topic_chats.create({
+		// Create a placeholder admin_chat record for this user's raw answer.
+		// We need an admin_chat row because chat_process.chat_id references admin_chat.
+		const userMessage = await prisma.admin_chat.create({
 			data: {
 				user_id: user_id,
-				subject_id: topic.subject_id,
-				chapter_id: topic.chapter_id,
-				topic_id: parseInt(topicId),
 				sender: 'user',
-				message: message || null,
-				file_url: file_url || null,
-				file_type: file_type || null
+				// Leave the display message empty for now; the AI will populate the corrected version later
+				message: null,
+				message_type: 'raw',
+				diff_html: null,
+				options: [],
+				images: [],
+				videos: [],
+				links: []
 			},
 			select: {
 				id: true,
 				sender: true,
 				message: true,
-				file_url: true,
-				file_type: true,
+				message_type: true,
+				options: true,
+				diff_html: true,
+				images: true,
+				videos: true,
+				links: true,
 				created_at: true
 			}
 		})
 
-		// Generate AI response using GPT-4 with topic context
-		let aiResponseText
+		// Store the raw user answer in chat_process linked to the placeholder admin_chat
+		const newChatProcess = await prisma.chat_process.create({
+			data: {
+				chat_id: userMessage.id,
+				user_message: message || '',
+				corrected_message: null,
+				ai_response: null,
+				wrong_message: null,
+				feedback: null,
+				images: [],
+				videos: [],
+				links: []
+			}
+		})
+
+		// Fetch topic goals for context
+		const topicGoals = await prisma.topic_goals.findMany({
+			where: {
+				topic_id: parseInt(topicId)
+			},
+			orderBy: {
+				order: 'asc'
+			}
+		})
+
+		// Find current goal (first incomplete goal)
+		let currentGoal = null
+		for (const goal of topicGoals) {
+			const progress = await prisma.chat_goal_progress.findFirst({
+				where: {
+					user_id: user_id,
+					goal_id: goal.id,
+					is_completed: true
+				}
+			})
+			if (!progress) {
+				currentGoal = goal
+				break
+			}
+		}
+
+		// Generate AI response using agentic tutor
+		let aiResponse
 		try {
-			aiResponseText = await generateTopicChatResponse(
+			aiResponse = await generateTopicChatResponse(
 				message || 'User shared a file',
 				topic.title,
 				topic.content || 'No additional content provided',
-				chatHistory
+				chatHistory,
+				currentGoal,
+				topicGoals
 			)
 		} catch (aiError) {
 			console.error('Error generating AI response:', aiError)
-			// Fallback to a generic error message
-			aiResponseText = `I'm having trouble processing your message right now. Please try again in a moment. In the meantime, you can review the topic content: ${topic.title}`
-		}
-		
-		const aiMessage = await prisma.topic_chats.create({
-			data: {
-				user_id: user_id,
-				subject_id: topic.subject_id,
-				chapter_id: topic.chapter_id,
-				topic_id: parseInt(topicId),
-				sender: 'ai',
-				message: aiResponseText,
-				file_url: null,
-				file_type: null
-			},
-			select: {
-				id: true,
-				sender: true,
-				message: true,
-				file_url: true,
-				file_type: true,
-				created_at: true
+			// Fallback response
+			aiResponse = {
+				messages: [
+					{ message: "I'm having trouble right now.", message_type: "text" },
+					{ message: "Could you try again?", message_type: "text" }
+				]
 			}
-		})
+		}
+
+		// Edge case: some model outputs send the correction as an AI message with message_type 'user_correction'
+		// instead of as aiResponse.user_correction. Detect that and apply it to the user's placeholder.
+		if (!aiResponse.user_correction && Array.isArray(aiResponse.messages)) {
+			const idx = aiResponse.messages.findIndex(m => m.message_type === 'user_correction' || (m.message && /<del>|<ins>/.test(m.message)));
+			if (idx !== -1) {
+				const correctionMsg = aiResponse.messages.splice(idx, 1)[0];
+				// Normalize to user_correction shape
+				const inferredUserCorrection = {
+					message_type: 'user_correction',
+					diff_html: correctionMsg.message || null,
+					complete_answer: correctionMsg.complete_answer || correctionMsg.message || null,
+					options: correctionMsg.options || ['Got it', 'Explain'],
+					feedback: correctionMsg.feedback || { is_correct: false, bubble_color: 'red' }
+				};
+
+				// Apply same update logic as when aiResponse.user_correction exists
+				try {
+					// Update chat_process with AI-corrected details
+					await prisma.chat_process.update({
+						where: { id: newChatProcess.id },
+						data: {
+							corrected_message: inferredUserCorrection.complete_answer || null,
+							ai_response: (aiResponse.messages && aiResponse.messages.length > 0) ? (aiResponse.messages[0].message || null) : null,
+							wrong_message: null,
+							feedback: inferredUserCorrection.feedback || null
+						}
+					})
+				} catch (e) {
+					console.error('Failed to update chat_process with inferred user correction:', e.message)
+				}
+
+				// Update the admin_chat placeholder to contain the corrected user bubble
+				try {
+					await prisma.admin_chat.update({
+						where: { id: userMessage.id },
+						data: {
+							diff_html: inferredUserCorrection.diff_html,
+							message: inferredUserCorrection.complete_answer || userMessage.message,
+							message_type: 'user_correction',
+							options: inferredUserCorrection.options || []
+						}
+					})
+					// Reflect update in userMessage object for response
+					userMessage.diff_html = inferredUserCorrection.diff_html;
+					userMessage.message = inferredUserCorrection.complete_answer || userMessage.message;
+					userMessage.message_type = 'user_correction';
+					userMessage.options = inferredUserCorrection.options || [];
+				} catch (e) {
+					console.error('Failed to update admin_chat placeholder with inferred correction:', e.message)
+				}
+			}
+		}
+
+		// Handle user_correction: apply correction to user's message and update chat_process
+		let userCorrection = null;
+		if (aiResponse.user_correction) {
+			userCorrection = aiResponse.user_correction;
+
+			// Update chat_process with AI-corrected details
+			await prisma.chat_process.update({
+				where: { id: newChatProcess.id },
+				data: {
+					corrected_message: userCorrection.complete_answer || null,
+					ai_response: (aiResponse.messages && aiResponse.messages.length > 0) ? (aiResponse.messages[0].message || null) : null,
+					wrong_message: null,
+					feedback: aiResponse.feedback || null
+				}
+			})
+
+			// Update the admin_chat placeholder to contain the corrected user bubble (what frontend will display)
+			await prisma.admin_chat.update({
+				where: { id: userMessage.id },
+				data: {
+					diff_html: userCorrection.diff_html,
+					message: userCorrection.complete_answer || userMessage.message,
+					message_type: 'user_correction',
+					options: userCorrection.options || []
+				}
+			});
+
+			/**
+			 * POST /api/topic-chats/:topicId/option
+			 * Handle user selecting an option (e.g., "Got it" or "Explain") from a corrected bubble
+			 * This endpoint records the user's choice against the original chat_process and invokes the
+			 * topic chat generator so the AI can respond (acknowledgement or explanation + next question).
+			 */
+			router.post('/:topicId/option', authenticateToken, async (req, res) => {
+				let user_id = req.user?.user_id;
+				const { topicId } = req.params;
+				const { chatId, option } = req.body;
+
+				if (!user_id) {
+					return res.status(401).json({ error: 'Authentication required - please login' });
+				}
+
+				if (!topicId || isNaN(parseInt(topicId))) {
+					return res.status(400).json({ error: 'Valid topic ID is required' });
+				}
+
+				if (!chatId || !option) {
+					return res.status(400).json({ error: 'chatId and option are required' });
+				}
+
+				try {
+					// Verify user has access to this topic
+					const topic = await prisma.topics.findFirst({
+						where: {
+							id: parseInt(topicId),
+							user_id: user_id
+						}
+					});
+
+					if (!topic) {
+						return res.status(403).json({ error: 'Topic not found or user does not have access' });
+					}
+
+					// Find the admin_chat entry to ensure it belongs to the user
+					const adminChat = await prisma.admin_chat.findUnique({ where: { id: chatId } });
+					if (!adminChat || adminChat.user_id !== user_id) {
+						return res.status(403).json({ error: 'Chat not found or access denied' });
+					}
+
+					// Update the related chat_process feedback to record the selected option
+					const relatedProcess = await prisma.chat_process.findFirst({ where: { chat_id: chatId } });
+					if (relatedProcess) {
+						const existingFeedback = relatedProcess.feedback || {};
+						const updatedFeedback = { ...existingFeedback, option_selected: option };
+						try {
+							await prisma.chat_process.update({
+								where: { id: relatedProcess.id },
+								data: { feedback: updatedFeedback }
+							});
+						} catch (e) {
+							console.error('Failed to update chat_process feedback for option selection:', e.message);
+						}
+					}
+
+					// We'll compute goal progress after we determine the current goal (below) to avoid referencing it early.
+
+					// Build recent chat history for context (same as in message route)
+					const topicGoalsForHistory = await prisma.topic_goals.findMany({ where: { topic_id: parseInt(topicId) }, select: { id: true } });
+					const goalIdsForHistory = topicGoalsForHistory.map(g => g.id);
+
+					const recentMessages = await prisma.admin_chat.findMany({
+						where: {
+							chat_goal_progress: {
+								some: {
+									goal_id: { in: goalIdsForHistory },
+									user_id: user_id
+								}
+							}
+						},
+						orderBy: { created_at: 'desc' },
+						take: 10,
+						select: { sender: true, message: true, message_type: true }
+					});
+
+					const chatHistory = recentMessages.reverse();
+
+					// Fetch topic goals and current goal
+					const topicGoals = await prisma.topic_goals.findMany({ where: { topic_id: parseInt(topicId) }, orderBy: { order: 'asc' } });
+					let currentGoal = null;
+					for (const goal of topicGoals) {
+						const progress = await prisma.chat_goal_progress.findFirst({ where: { user_id: user_id, goal_id: goal.id, is_completed: true } });
+						if (!progress) { currentGoal = goal; break; }
+					}
+
+					// --- NEW: compute and persist goal progress based on the option we just recorded ---
+					if (currentGoal) {
+						try {
+							// Re-read the chat_process to determine is_correct flag
+							const refreshedProcess = await prisma.chat_process.findFirst({ where: { chat_id: chatId } });
+							const priorIsCorrect = !!(refreshedProcess && refreshedProcess.feedback && refreshedProcess.feedback.is_correct);
+
+							let prog = await prisma.chat_goal_progress.findFirst({ where: { user_id: user_id, goal_id: currentGoal.id } });
+							if (prog) {
+								await prisma.chat_goal_progress.update({
+									where: { id: prog.id },
+									data: {
+										num_questions: { increment: 1 },
+										num_correct: priorIsCorrect ? { increment: 1 } : undefined,
+										num_incorrect: priorIsCorrect ? undefined : { increment: 1 },
+										last_question_id: refreshedProcess ? refreshedProcess.id : prog.last_question_id
+									}
+								});
+								prog = await prisma.chat_goal_progress.findUnique({ where: { id: prog.id } });
+							} else {
+								prog = await prisma.chat_goal_progress.create({
+									data: {
+										chat_id: chatId,
+										goal_id: currentGoal.id,
+										user_id: user_id,
+										is_completed: false,
+										num_questions: 1,
+										num_correct: priorIsCorrect ? 1 : 0,
+										num_incorrect: priorIsCorrect ? 0 : 1,
+										last_question_id: refreshedProcess ? refreshedProcess.id : null
+									}
+								});
+							}
+
+							// Evaluate completion
+							const numQ = prog.num_questions || 0;
+							const numC = prog.num_correct || 0;
+							const percent = numQ > 0 ? Math.round((numC / numQ) * 100) : 0;
+							const REQUIRED_QUESTIONS = 3;
+							const REQUIRED_PERCENT = 80;
+							const markCompleted = ((numQ >= REQUIRED_QUESTIONS && percent >= REQUIRED_PERCENT) || percent >= REQUIRED_PERCENT);
+							if (markCompleted && !prog.is_completed) {
+								await prisma.chat_goal_progress.update({ where: { id: prog.id }, data: { is_completed: true } });
+							}
+
+							// Recompute topic completion percent
+							const allGoalsProgress = await prisma.chat_goal_progress.groupBy({
+								by: ['goal_id'],
+								where: { user_id: user_id, goal_id: { in: topicGoals.map(g => g.id) }, is_completed: true }
+							});
+							const completedGoalsCount = allGoalsProgress.length;
+							const totalGoalsCount = topicGoals.length;
+							const completionPercent = totalGoalsCount > 0 ? Math.round((completedGoalsCount / totalGoalsCount) * 100) : 0;
+							await prisma.topics.update({ where: { id: parseInt(topicId) }, data: { completion_percent: completionPercent, is_completed: completionPercent >= 80 } });
+
+							// Append progress message so the AI sees updated progress
+							const progressMsgToAppend = { sender: 'ai', message: `[Progress] Goal "${currentGoal.title}": ${numC}/${numQ} correct (${percent}%)` };
+							chatHistory.push(progressMsgToAppend);
+						} catch (e) {
+							console.error('Failed to update chat_goal_progress after option selection:', e.message);
+						}
+					}
+
+					// Call the topic chat generator with the option as the user reply
+					let aiResponse;
+					try {
+						aiResponse = await generateTopicChatResponse(option, topic.title, topic.content || 'No additional content provided', chatHistory, currentGoal, topicGoals);
+					} catch (aiError) {
+						console.error('Error generating AI response for option selection:', aiError);
+						aiResponse = { messages: [ { message: "I'm having trouble right now.", message_type: 'text' } ] };
+					}
+
+					// Save AI messages returned
+					const aiMessages = [];
+					for (let i = 0; i < (aiResponse.messages || []).length; i++) {
+						const aiMsg = aiResponse.messages[i];
+						const savedAiMessage = await prisma.admin_chat.create({
+							data: {
+								user_id: user_id,
+								sender: 'ai',
+								message: aiMsg.message,
+								message_type: aiMsg.message_type || 'text',
+								options: aiMsg.options || [],
+								diff_html: null,
+								images: aiMsg.images || [],
+								videos: aiMsg.videos || [],
+								links: aiMsg.links || []
+							},
+							select: {
+								id: true, sender: true, message: true, message_type: true, options: true, diff_html: true, images: true, videos: true, links: true, created_at: true
+							}
+						});
+						aiMessages.push(savedAiMessage);
+					}
+
+					return res.status(201).json({ aiMessages, userCorrection: aiResponse.user_correction || null, feedback: aiResponse.feedback || null });
+				} catch (err) {
+					console.error('Error handling option selection:', err);
+					return res.status(500).json({ error: 'Server error while processing option' });
+				}
+			});
+
+			// Refresh the userMessage object to reflect changes
+			userMessage.diff_html = userCorrection.diff_html;
+			userMessage.message = userCorrection.complete_answer || userMessage.message;
+			userMessage.message_type = 'user_correction';
+			userMessage.options = userCorrection.options || [];
+		} else {
+			// No explicit user_correction returned: still update chat_process with AI response if present
+			if (aiResponse.feedback || (aiResponse.messages && aiResponse.messages.length > 0)) {
+				await prisma.chat_process.update({
+					where: { id: newChatProcess.id },
+					data: {
+						corrected_message: aiResponse.feedback && aiResponse.feedback.corrected_answer ? aiResponse.feedback.corrected_answer : null,
+						ai_response: (aiResponse.messages && aiResponse.messages.length > 0) ? (aiResponse.messages[0].message || null) : null,
+						feedback: aiResponse.feedback || null
+					}
+				})
+			}
+
+			// Also update the admin_chat placeholder so the user message appears in chat history
+			// Use the original user message (from request) as display message when no correction
+			try {
+				await prisma.admin_chat.update({
+					where: { id: userMessage.id },
+					data: {
+						message: message || userMessage.message || null,
+						message_type: 'text',
+						diff_html: null,
+						options: []
+					}
+				})
+
+				// Reflect update in returned object
+				userMessage.message = message || userMessage.message
+				userMessage.message_type = 'text'
+				userMessage.diff_html = null
+				userMessage.options = []
+			} catch (e) {
+				console.error('Failed to update admin_chat placeholder for user message:', e)
+			}
+		}
+
+		// Save AI messages (multiple bubbles) with message_type and options
+		const aiMessages = []
+		for (let i = 0; i < (aiResponse.messages || []).length; i++) {
+			const aiMsg = aiResponse.messages[i];
+
+			const savedAiMessage = await prisma.admin_chat.create({
+				data: {
+					user_id: user_id,
+					sender: 'ai',
+					message: aiMsg.message,
+					message_type: aiMsg.message_type || 'text',
+					options: aiMsg.options || [],
+					diff_html: null,
+					images: aiMsg.images || [],
+					videos: aiMsg.videos || [],
+					links: aiMsg.links || []
+				},
+				select: {
+					id: true,
+					sender: true,
+					message: true,
+					message_type: true,
+					options: true,
+					diff_html: true,
+					images: true,
+					videos: true,
+					links: true,
+					created_at: true
+				}
+			})
+			aiMessages.push(savedAiMessage)
+		}
+
+		// If feedback is provided, save detailed process and progress using chat_process and chat_goal_progress
+		if (aiResponse.feedback && currentGoal) {
+			// Save detailed chat process (stores question, corrected response, explanation, etc.)
+			const chatProcess = await prisma.chat_process.create({
+				data: {
+					chat_id: userMessage.id,
+					user_message: message || '',
+					corrected_message: aiResponse.feedback.corrected_answer || '',
+					ai_response: (aiResponse.messages && aiResponse.messages.length > 0) ? (aiResponse.messages[0].message || '') : '',
+					wrong_message: aiResponse.feedback.wrong_message || null,
+					feedback: aiResponse.feedback || null,
+					images: [],
+					videos: [],
+					links: []
+				}
+			})
+
+			// Create chat_goal_progress record linking this chat to the goal for the user
+			const isUnderstood = !!(aiResponse.feedback.is_correct && (aiResponse.feedback.score_percent || 0) >= 80)
+			await prisma.chat_goal_progress.create({
+				data: {
+					chat_id: userMessage.id,
+					goal_id: currentGoal.id,
+					user_id: user_id,
+					is_completed: isUnderstood,
+					num_questions: 1,
+					num_correct: isUnderstood ? 1 : 0,
+					num_incorrect: isUnderstood ? 0 : 1,
+					last_question_id: chatProcess.id
+				}
+			})
+
+			// Update topic completion based on chat_goal_progress
+			const allGoalsProgress = await prisma.chat_goal_progress.groupBy({
+				by: ['goal_id'],
+				where: {
+					user_id: user_id,
+					goal_id: {
+						in: topicGoals.map(g => g.id)
+					},
+					is_completed: true
+				}
+			})
+
+			const completedGoalsCount = allGoalsProgress.length
+			const totalGoalsCount = topicGoals.length
+			const completionPercent = totalGoalsCount > 0 
+				? Math.round((completedGoalsCount / totalGoalsCount) * 100)
+				: 0
+
+			await prisma.topics.update({
+				where: { id: parseInt(topicId) },
+				data: {
+					completion_percent: completionPercent,
+					is_completed: completionPercent >= 80
+				}
+			})
+		}
 
 		// Update user's chat count
 		await prisma.users.update({
@@ -215,13 +786,78 @@ router.post('/:topicId/message', authenticateToken, async (req, res) => {
 			data: { num_chats: { increment: 1 } }
 		})
 
+		// Update topic time spent if provided
+		if (session_time_seconds && session_time_seconds > 0) {
+			await prisma.topics.update({
+				where: { id: parseInt(topicId) },
+				data: {
+					time_spent_seconds: {
+						increment: Math.floor(session_time_seconds)
+					}
+				}
+			})
+		}
+
 		return res.status(201).json({
 			userMessage,
-			aiMessage
+			aiMessages,
+			feedback: aiResponse.feedback || (userCorrection?.feedback) || null,
+			userCorrection: userCorrection || null,
+			session_summary: aiResponse.session_summary || null
 		})
 	} catch (err) {
 		console.error('Error sending topic chat message:', err)
 		return res.status(500).json({ error: 'Server error while sending message' })
+	}
+})
+
+// POST /api/topic-chats/:topicId/update-time
+// Update time spent on topic without sending a message
+router.post('/:topicId/update-time', authenticateToken, async (req, res) => {
+	let user_id = req.user?.user_id
+	const { topicId } = req.params
+	const { session_time_seconds } = req.body
+
+	// For production, always require authenticated user
+	if (!user_id) {
+		return res.status(401).json({ error: 'Authentication required - please login' })
+	}
+
+	if (!topicId || isNaN(parseInt(topicId))) {
+		return res.status(400).json({ error: 'Valid topic ID is required' })
+	}
+
+	if (!session_time_seconds || session_time_seconds <= 0) {
+		return res.status(400).json({ error: 'Valid session time is required' })
+	}
+
+	try {
+		// Verify user has access to this topic
+		const topic = await prisma.topics.findFirst({
+			where: {
+				id: parseInt(topicId),
+				user_id: user_id
+			}
+		})
+
+		if (!topic) {
+			return res.status(403).json({ error: 'Topic not found or user does not have access' })
+		}
+
+		// Update topic time spent
+		await prisma.topics.update({
+			where: { id: parseInt(topicId) },
+			data: {
+				time_spent_seconds: {
+					increment: Math.floor(session_time_seconds)
+				}
+			}
+		})
+
+		return res.status(200).json({ success: true })
+	} catch (err) {
+		console.error('Error updating topic time:', err)
+		return res.status(500).json({ error: 'Server error while updating time' })
 	}
 })
 

@@ -9,7 +9,6 @@ import {
   SafeAreaView,
   StatusBar,
   ActivityIndicator,
-  Image,
   Alert,
   KeyboardAvoidingView,
   Platform
@@ -17,12 +16,16 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
+import { useAuthErrorHandler } from '../../src/hooks/useAuthErrorHandler';
+import { API_BASE_URL } from '../../src/config/api';
+import MessageBubble from '../../components/chat/MessageBubble';
+import GoalsProgressBar from '../../components/chat/GoalsProgressBar';
 import {
   fetchTopicChatMessages,
   sendTopicChatMessage,
-  uploadFile,
   TopicChatMessage,
-  TopicChatDetails
+  TopicChatDetails,
+  TopicGoal
 } from '../../src/client/topic-chat/topic-chat';
 
 export default function TopicChatScreen() {
@@ -34,14 +37,21 @@ export default function TopicChatScreen() {
     subjectName: string;
   }>();
   const { user, token } = useAuth();
+  const { handleAuthError } = useAuthErrorHandler();
 
   const [messages, setMessages] = useState<TopicChatMessage[]>([]);
   const [topic, setTopic] = useState<TopicChatDetails | null>(null);
+  const [goals, setGoals] = useState<TopicGoal[]>([]);
+  const [feedbackMap, setFeedbackMap] = useState<Map<number, any>>(new Map()); // Store feedback per message
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [tutorFlow, setTutorFlow] = useState<'welcome' | 'ready_check' | 'teaching'>('welcome');
+  const [sessionStartTime, setSessionStartTime] = useState<Date>(new Date());
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [initialTimeSpent, setInitialTimeSpent] = useState<number>(0); // Store initial time from DB
+  const [currentSessionTime, setCurrentSessionTime] = useState<number>(0); // Track current session time
+  const [elapsedTime, setElapsedTime] = useState<string>('0:00');
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -57,6 +67,55 @@ export default function TopicChatScreen() {
     }, 100);
   }, [messages]);
 
+  useEffect(() => {
+    // Update timer every second
+    const interval = setInterval(() => {
+      const now = new Date();
+      const sessionDiff = Math.floor((now.getTime() - sessionStartTime.getTime()) / 1000);
+      setCurrentSessionTime(sessionDiff);
+      const totalSeconds = initialTimeSpent + sessionDiff;
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      setElapsedTime(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sessionStartTime, initialTimeSpent]);
+
+  // Save time spent periodically (every 30 seconds) and on unmount
+  useEffect(() => {
+    const saveTimeSpent = async () => {
+      if (currentSessionTime > 0 && topicId && user && token) {
+        try {
+          // Send a silent update to save time
+          await fetch(`${API_BASE_URL}/api/topic-chats/${topicId}/update-time`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              session_time_seconds: currentSessionTime
+            })
+          });
+        } catch (err) {
+          console.error('Error saving time spent:', err);
+        }
+      }
+    };
+
+    // Save every 30 seconds
+    const saveInterval = setInterval(() => {
+      saveTimeSpent();
+    }, 30000);
+
+    // Save on unmount/screen leave
+    return () => {
+      clearInterval(saveInterval);
+      saveTimeSpent();
+    };
+  }, [currentSessionTime, topicId, user, token]);
+
   const loadTopicChat = async () => {
     try {
       setLoading(true);
@@ -68,206 +127,327 @@ export default function TopicChatScreen() {
       });
 
       setTopic(response.topic);
-      setMessages(response.messages);
+      setGoals(response.goals || []);
+      
+      // Set initial time spent from database
+      const timeSpent = response.topic?.time_spent_seconds || 0;
+      setInitialTimeSpent(timeSpent);
+      setSessionStartTime(new Date()); // Reset session start time
+      
+      // If there are no messages but there's an initial greeting, add it
+      if (response.messages.length === 0 && response.initialGreeting) {
+        const greetingMessages: TopicChatMessage[] = response.initialGreeting.map((msg, idx) => ({
+          id: Date.now() + idx,
+          sender: 'ai' as const,
+          message: msg.message,
+          message_type: msg.message_type,
+          options: msg.options,
+          created_at: new Date().toISOString()
+        }));
+        setMessages(greetingMessages);
+      } else {
+        setMessages(response.messages);
+      }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load chat';
-      setError(errorMessage);
-      console.error('Error loading topic chat:', err);
+      const error = err instanceof Error ? err : new Error('Failed to load chat');
+      
+      // Handle authentication errors
+      const wasAuthError = await handleAuthError(error);
+      if (!wasAuthError) {
+        setError(error.message);
+        console.error('Error loading topic chat:', err);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || sending) return;
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputText.trim();
+    if (!textToSend || sending) return;
 
-    const messageText = inputText.trim();
     setInputText('');
     setSending(true);
 
     try {
-      // Add user message first
+      // Add user message immediately for better UX
       const userMessage: TopicChatMessage = {
         id: Date.now(),
-        message: messageText,
+        message: textToSend,
         sender: 'user',
-        created_at: new Date().toISOString(),
-        file_url: undefined,
-        file_type: undefined
+        created_at: new Date().toISOString()
       };
 
       setMessages(prev => [...prev, userMessage]);
 
       const response = await sendTopicChatMessage(
         parseInt(topicId!),
-        { message: messageText },
+        { 
+          message: textToSend,
+          session_time_seconds: currentSessionTime 
+        },
         {
           userId: user?.user_id,
           token: token || undefined
         }
       );
 
-      // Add AI response with tutor-like enhancements
-      let aiMessageText = response.aiMessage.message;
+      // aiMessages may be returned as `aiMessages` (new) or `messages` (alias)
+      const aiMsgs: TopicChatMessage[] = (response as any).messages || (response as any).aiMessages || [];
       
-      // If this is early in the conversation, add encouraging tutor language
-      if (messages.length < 3) {
-        aiMessageText = `Great question! ${aiMessageText}\n\nDoes this make sense to you? Feel free to ask for clarification or examples if you need them!`;
-      }
+      // Add feedback to the feedback map for user message
+      // Capture into locals because TypeScript doesn't narrow across closures reliably
+      const userCorrection = (response as any).userCorrection ?? null;
+      const directFeedback = (response as any).feedback ?? null;
 
-      const enhancedAiMessage: TopicChatMessage = {
-        ...response.aiMessage,
-        message: aiMessageText
-      };
-
-      setMessages(prev => [...prev.slice(0, -1), enhancedAiMessage]);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
-      Alert.alert('Error', errorMessage);
-      // Restore the input text if sending failed
-      setInputText(messageText);
-      // Remove the user message we added if there was an error
-      setMessages(prev => prev.slice(0, -1));
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleReadyToLearn = async () => {
-    setTutorFlow('teaching');
-    setSending(true);
-
-    try {
-      // Send a welcome teaching message
-      const welcomeMessage = `Great! Let's dive into "${topic?.title || topicTitle}". 
-
-Let me start by giving you a clear introduction to this topic. I'll break it down in simple terms and make sure you understand each concept before we move forward.
-
-**Introduction to ${topic?.title || topicTitle}:**
-
-This topic is an important part of your ${subjectName} studies. Let me explain what this is all about and why it's important for you to understand.
-
-Are you following along so far? Feel free to ask questions at any point - I'm here to make sure you truly understand everything!`;
-
-      // Create a simulated AI response
-      const aiMessage: TopicChatMessage = {
-        id: Date.now(),
-        message: welcomeMessage,
-        sender: 'ai',
-        created_at: new Date().toISOString(),
-        file_url: undefined,
-        file_type: undefined
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-    } catch (err) {
-      console.error('Error starting tutorial:', err);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleImagePicker = async () => {
-    try {
-      // For now, we'll show an alert. In a real implementation, you would use
-      // a proper image picker library like react-native-image-picker
-      Alert.alert(
-        'Image Upload',
-        'Image upload feature will be available soon!',
-        [{ text: 'OK' }]
-      );
-      
-      // Placeholder implementation
-      /*
-      setSending(true);
-      
-      try {
-        // Upload file (placeholder implementation)
-        const uploadResult = await uploadFile({ name: 'image.jpg', type: 'image/jpeg' }, {
-          token: token || undefined
-        });
-
-        // Send message with image
-        const response = await sendTopicChatMessage(
-          parseInt(topicId!),
-          {
-            message: 'Shared an image',
-            file_url: uploadResult.file_url,
-            file_type: uploadResult.file_type
-          },
-          {
-            userId: user?.user_id,
-            token: token || undefined
+      if (userCorrection || directFeedback) {
+        setFeedbackMap(prev => {
+          const newMap = new Map(prev);
+          if (userCorrection) {
+            newMap.set(userMessage.id, {
+              ...userCorrection,
+              feedback: userCorrection.feedback // Ensure nested feedback is also passed
+            });
           }
-        );
-
-        setMessages(prev => [...prev, response.userMessage, response.aiMessage]);
-      } catch (err) {
-        Alert.alert('Error', 'Failed to upload image');
-      } finally {
-        setSending(false);
+          if (directFeedback) {
+            newMap.set(userMessage.id, directFeedback);
+          }
+          return newMap;
+        });
       }
-      */
+
+      // -----------------------------------------------------------------
+      // --- START: CORRECTED CODE BLOCK ---
+      // -----------------------------------------------------------------
+      // The old if/else (response.userCorrection) block is removed.
+      // We now trust the feedbackMap to update the user bubble.
+      // We just need to append AI messages and check for a summary.
+
+      // Convert AI messages and add unique IDs
+      const newAIMessages = aiMsgs.map(m => ({
+        ...m,
+        id: Date.now() + Math.random(),
+        created_at: new Date().toISOString()
+      }));
+
+      // If the server returned a canonical userMessage (the admin_chat row), replace the
+      // local placeholder message with the server version so that fields like
+      // message_type and diff_html are preserved and the bubble renders as a diff.
+      const serverUserMessage = (response as any).userMessage ?? null;
+
+      // Build the new messages array by replacing the last local placeholder with the server one
+      if (serverUserMessage) {
+        const serverMsg: TopicChatMessage = {
+          id: serverUserMessage.id,
+          sender: 'user',
+          message: serverUserMessage.message || textToSend,
+          message_type: serverUserMessage.message_type || 'text',
+          options: serverUserMessage.options || [],
+          diff_html: serverUserMessage.diff_html || null,
+          file_url: serverUserMessage.file_url || undefined,
+          file_type: serverUserMessage.file_type || undefined,
+          created_at: serverUserMessage.created_at || new Date().toISOString()
+        };
+
+        // If there's a session summary, append it after AI messages
+        if (response.session_summary) {
+          const summaryMessage: TopicChatMessage = {
+            id: Date.now() + 1000,
+            sender: 'ai',
+            message: 'Session Summary',
+            message_type: 'session_summary',
+            session_summary: response.session_summary,
+            created_at: new Date().toISOString()
+          };
+
+          setMessages(prev => {
+            // remove the temporary placeholder (assumed to be last)
+            const withoutLast = prev.slice(0, -1);
+            return [...withoutLast, serverMsg, ...newAIMessages, summaryMessage];
+          });
+          return;
+        }
+
+        // No session summary: replace placeholder and append AI messages
+        setMessages(prev => {
+          const withoutLast = prev.slice(0, -1);
+          return [...withoutLast, serverMsg, ...newAIMessages];
+        });
+      } else {
+        // No server userMessage returned; fallback: append AI messages after placeholder
+        if (response.session_summary) {
+          const summaryMessage: TopicChatMessage = {
+            id: Date.now() + 1000,
+            sender: 'ai',
+            message: 'Session Summary',
+            message_type: 'session_summary',
+            session_summary: response.session_summary,
+            created_at: new Date().toISOString()
+          };
+          setMessages(prev => [...prev, ...newAIMessages, summaryMessage]);
+        } else {
+          setMessages(prev => [...prev, ...newAIMessages]);
+        }
+      }
+
+      // -----------------------------------------------------------------
+      // --- END: CORRECTED CODE BLOCK ---
+      // -----------------------------------------------------------------
+
     } catch (err) {
-      Alert.alert('Error', 'Failed to pick image');
+      const error = err instanceof Error ? err : new Error('Failed to send message');
+      
+      // Handle authentication errors
+      const wasAuthError = await handleAuthError(error);
+      if (!wasAuthError) {
+        Alert.alert('Error', error.message);
+        // Restore input and remove temporary message
+        setInputText(textToSend);
+        setMessages(prev => prev.slice(0, -1));
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleOptionSelect = async (option: string, chatId?: number) => {
+    // Use dedicated endpoint to record option selection and receive AI response
+    if (!topicId || !user || !token) {
+      // Fallback: send as normal message
+      return handleSendMessage(option);
+    }
+
+    setSending(true);
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/topic-chats/${topicId}/option`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ chatId, option })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.text();
+        throw new Error(err || 'Option endpoint failed');
+      }
+
+      const data = await resp.json();
+
+      // Append returned AI messages (if any)
+      const aiMsgs: TopicChatMessage[] = (data.aiMessages || []).map((m: any) => ({
+        id: m.id || Date.now() + Math.random(),
+        sender: 'ai',
+        message: m.message,
+        message_type: m.message_type || 'text',
+        options: m.options || [],
+        created_at: m.created_at || new Date().toISOString()
+      }));
+
+      if (aiMsgs.length > 0) {
+        setMessages(prev => [...prev, ...aiMsgs]);
+      }
+
+      // Optionally update feedbackMap if server returned feedback
+      if (data.feedback && chatId) {
+        setFeedbackMap(prev => {
+          const newMap = new Map(prev);
+          newMap.set(chatId, data.feedback);
+          return newMap;
+        });
+      }
+
+    } catch (err) {
+      console.error('Error sending option selection:', err);
+      // fallback: send option as a normal message
+      await handleSendMessage(option);
+    } finally {
+      setSending(false);
     }
   };
 
   const renderMessage = (message: TopicChatMessage, index: number) => {
     const isUser = message.sender === 'user';
-    const isAI = message.sender === 'ai';
+    
+    // Get feedback for this message (for user messages)
+    const feedback = feedbackMap.get(message.id);
+    
+    // -----------------------------------------------------------------
+    // --- START: CORRECTED CODE BLOCK ---
+    // -----------------------------------------------------------------
+    
+    // Set defaults from the message object itself
+    let bubbleColor: 'green' | 'red' | 'yellow' | 'default' = 'default';
+    let isCorrect: boolean | undefined = undefined;
+    let emoji: string | undefined = undefined;
+    let messageType = message.message_type || 'text';
+    let options = message.options || [];
+    let diffHtml = message.diff_html;
+    let completeAnswer: string | undefined = (message as any).complete_answer;
+
+    // If this is a user message AND we have feedback for it, override the props
+    if (isUser && feedback) {
+      diffHtml = feedback.diff_html || diffHtml;
+      options = feedback.options || options;
+      bubbleColor = feedback.bubble_color || (feedback.is_correct ? 'green' : 'red');
+      isCorrect = feedback.is_correct;
+      completeAnswer = feedback.complete_answer || completeAnswer;
+      
+      // If we have correction details, set the type
+      if (feedback.diff_html || feedback.complete_answer) {
+        messageType = 'user_correction';
+      }
+    }
+    // -----------------------------------------------------------------
+    // --- END: CORRECTED CODE BLOCK ---
+    // -----------------------------------------------------------------
+
+    // For AI messages, check if there's embedded feedback
+    if (!isUser && message.feedback) {
+      bubbleColor = message.feedback.bubble_color || 'default';
+      emoji = message.feedback.emoji;
+    }
 
     return (
       <View key={`${message.id}-${index}`} style={[
-        styles.messageContainer,
-        isUser && styles.userMessageContainer
+        styles.messageRow,
+        isUser ? styles.userMessageRow : styles.aiMessageRow
       ]}>
-        {isAI && (
+        {/* AI Avatar on Left */}
+        {!isUser && (
           <View style={styles.aiAvatar}>
             <Text style={styles.aiAvatarText}>C</Text>
           </View>
         )}
         
         <View style={[
-          styles.messageBubble,
-          isUser ? styles.userMessageBubble : styles.aiMessageBubble
+          styles.bubbleWrapper,
+          isUser ? styles.userBubbleWrapper : styles.aiBubbleWrapper
         ]}>
-          {message.file_url && (
-            <Image 
-              source={{ uri: message.file_url }}
-              style={styles.messageImage}
-              resizeMode="cover"
-            />
-          )}
-          
-          {message.message && (
-            <Text style={[
-              styles.messageText,
-              isUser ? styles.userMessageText : styles.aiMessageText
-            ]}>
-              {message.message}
-            </Text>
-          )}
-          
-          <Text style={[
-            styles.messageTime,
-            isUser ? styles.userMessageTime : styles.aiMessageTime
-          ]}>
-            {new Date(message.created_at).toLocaleTimeString([], { 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            })}
-          </Text>
+          <MessageBubble
+            message={message.message || ''} // <-- This is now ALWAYS the original text
+            messageType={messageType}
+            options={options}
+            diffHtml={diffHtml}
+            completeAnswer={completeAnswer} // <-- ADDED THIS NEW PROP
+            chatId={message.id}
+            fileUrl={message.file_url}
+            fileType={message.file_type}
+            sender={message.sender}
+            timestamp={message.created_at}
+            bubbleColor={bubbleColor}
+            emoji={emoji}
+            isCorrect={isCorrect}
+            sessionSummary={message.session_summary}
+            onOptionSelect={handleOptionSelect}
+          />
         </View>
 
+        {/* User Avatar on Right */}
         {isUser && (
           <View style={styles.userAvatar}>
-            <Image
-              source={{ 
-                uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10B981&color=fff&size=64` 
-              }}
-              style={styles.userAvatarImage}
-            />
+            <Ionicons name="person" size={20} color="#fff" />
           </View>
         )}
       </View>
@@ -280,7 +460,7 @@ Are you following along so far? Feel free to ask questions at any point - I'm he
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#10B981" />
-          <Text style={styles.loadingText}>Loading chat...</Text>
+          <Text style={styles.loadingText}>Starting your learning session...</Text>
         </View>
       </SafeAreaView>
     );
@@ -312,33 +492,26 @@ Are you following along so far? Feel free to ask questions at any point - I'm he
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </Pressable>
         
         <View style={styles.headerContent}>
-          <View style={styles.headerInfo}>
-            <View style={styles.cloopAvatar}>
-              <Text style={styles.cloopAvatarText}>C</Text>
-            </View>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Cloop AI</Text>
-              <Text style={styles.headerSubtitle}>
-                {topic?.title || topicTitle}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.onlineIndicator}>
-            <View style={styles.onlineDot} />
-            <Text style={styles.onlineText}>Online</Text>
+          <Text style={styles.headerTitle}>{topic?.title || topicTitle}</Text>
+          <View style={styles.timerContainer}>
+            <Ionicons name="time-outline" size={16} color="#fff" />
+            <Text style={styles.timerText}>{elapsedTime}</Text>
           </View>
         </View>
       </View>
 
+      {/* Goals Progress Bar */}
+      <GoalsProgressBar goals={goals} forceCollapse={isInputFocused} />
+
       {/* Topic Context Bar */}
       <View style={styles.contextBar}>
         <Ionicons name="book-outline" size={16} color="#6B7280" />
-        <Text style={styles.contextText}>
-          {subjectName} → {chapterTitle} → {topic?.title || topicTitle}
+        <Text style={styles.contextText} numberOfLines={1}>
+          {subjectName} → {chapterTitle}
         </Text>
       </View>
 
@@ -354,40 +527,12 @@ Are you following along so far? Feel free to ask questions at any point - I'm he
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
         >
-          {messages.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.welcomeAvatar}>
-                <Text style={styles.welcomeAvatarText}>C</Text>
-              </View>
-              <Text style={styles.welcomeTitle}>Welcome to your personal tutor! 🎓</Text>
-              <Text style={styles.welcomeMessage}>
-                Hi there! I'm Cloop, your AI tutor. I'm excited to help you learn about "{topic?.title || topicTitle}".
-                Let's start this learning journey together!
-              </Text>
-              <View style={styles.suggestionsContainer}>
-                <Text style={styles.suggestionsTitle}>Ready to begin?</Text>
-                <Pressable 
-                  style={styles.readyButton}
-                  onPress={() => handleReadyToLearn()}
-                >
-                  <Text style={styles.readyButtonText}>Yes, I'm ready to learn! 🚀</Text>
-                </Pressable>
-                <Pressable 
-                  style={styles.notReadyButton}
-                  onPress={() => setInputText("I have some questions first")}
-                >
-                  <Text style={styles.notReadyButtonText}>I have some questions first</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            messages.map((message, index) => renderMessage(message, index))
-          )}
+          {messages.map((message, index) => renderMessage(message, index))}
           
           {sending && (
             <View style={styles.typingIndicator}>
               <View style={styles.aiAvatar}>
-                <Text style={styles.aiAvatarText}>C</Text>
+                <Ionicons name="logo-android" size={20} color="#fff" />
               </View>
               <View style={styles.typingBubble}>
                 <View style={styles.typingDots}>
@@ -405,43 +550,32 @@ Are you following along so far? Feel free to ask questions at any point - I'm he
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.textInput}
-              placeholder="Ask me anything about this topic..."
+              placeholder="Type your answer..."
               placeholderTextColor="#9CA3AF"
               value={inputText}
               onChangeText={setInputText}
               multiline
-              maxLength={1000}
+              maxLength={500}
               editable={!sending}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
+              onSubmitEditing={() => handleSendMessage()}
             />
             
-            <View style={styles.inputActions}>
-              <Pressable 
-                style={styles.attachButton}
-                onPress={handleImagePicker}
-                disabled={sending}
-              >
-                <Ionicons 
-                  name="image-outline" 
-                  size={20} 
-                  color={sending ? "#D1D5DB" : "#6B7280"} 
-                />
-              </Pressable>
-              
-              <Pressable 
-                style={[
-                  styles.sendButton,
-                  (!inputText.trim() || sending) && styles.sendButtonDisabled
-                ]}
-                onPress={handleSendMessage}
-                disabled={!inputText.trim() || sending}
-              >
-                {sending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="send" size={18} color="#fff" />
-                )}
-              </Pressable>
-            </View>
+            <Pressable 
+              style={[
+                styles.sendButton,
+                (!inputText.trim() || sending) && styles.sendButtonDisabled
+              ]}
+              onPress={() => handleSendMessage()}
+              disabled={!inputText.trim() || sending}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="send" size={18} color="#fff" />
+              )}
+            </Pressable>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -497,68 +631,37 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingVertical: 16,
+    backgroundColor: '#EF4444',
   },
   backButton: {
-    marginRight: 12,
+    position: 'absolute',
+    left: 16,
   },
   headerContent: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  cloopAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  cloopAvatarText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  headerText: {
-    flex: 1,
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#fff',
+    marginBottom: 4,
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 1,
-  },
-  onlineIndicator: {
+  timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  onlineText: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '500',
+  timerText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   contextBar: {
     flexDirection: 'row',
@@ -573,6 +676,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 6,
+    flex: 1,
   },
   chatContainer: {
     flex: 1,
@@ -581,170 +685,70 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    padding: 16,
+    padding: 8,
     paddingBottom: 8,
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 48,
-  },
-  welcomeAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  welcomeAvatarText: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  welcomeMessage: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-    paddingHorizontal: 20,
-  },
-  suggestionsContainer: {
-    width: '100%',
-    paddingHorizontal: 20,
-  },
-  suggestionsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-  },
-  suggestionCard: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  suggestionText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  readyButton: {
-    backgroundColor: '#10B981',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  readyButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  notReadyButton: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  notReadyButtonText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  messageContainer: {
+  messageRow: {
     flexDirection: 'row',
-    marginBottom: 16,
-    alignItems: 'flex-end',
+    marginBottom: 12,
+    alignItems: 'flex-start',
+    maxWidth: '100%',
   },
-  userMessageContainer: {
+  aiMessageRow: {
+    justifyContent: 'flex-start',
+  },
+  userMessageRow: {
     justifyContent: 'flex-end',
+  },
+  bubbleWrapper: {
+    maxWidth: '75%',
+    flexShrink: 1,
+  },
+  aiBubbleWrapper: {
+    alignItems: 'flex-start',
+  },
+  userBubbleWrapper: {
+    alignItems: 'flex-end',
   },
   aiAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#10B981',
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 6,
+    marginTop: 2,
+    flexShrink: 0,
   },
   aiAvatarText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   userAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    marginLeft: 8,
-  },
-  userAvatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    borderRadius: 18,
-    padding: 12,
-  },
-  userMessageBubble: {
-    backgroundColor: '#10B981',
-  },
-  aiMessageBubble: {
-    backgroundColor: '#F3F4F6',
-  },
-  messageImage: {
-    width: 200,
-    height: 150,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  userMessageText: {
-    color: '#FFFFFF',
-  },
-  aiMessageText: {
-    color: '#111827',
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4,
-  },
-  userMessageTime: {
-    color: '#FFFFFF',
-    opacity: 0.8,
-  },
-  aiMessageTime: {
-    color: '#6B7280',
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+    marginTop: 2,
+    flexShrink: 0,
   },
   typingIndicator: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 16,
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    maxWidth: '100%',
   },
   typingBubble: {
-    backgroundColor: '#F3F4F6',
-    borderRadius: 18,
-    padding: 16,
-    paddingHorizontal: 20,
+    backgroundColor: '#DDD6FE',
+    borderRadius: 16,
+    padding: 12,
+    paddingHorizontal: 16,
+    maxWidth: '70%',
   },
   typingDots: {
     flexDirection: 'row',
@@ -789,15 +793,6 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     paddingVertical: 8,
   },
-  inputActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  attachButton: {
-    padding: 8,
-    marginRight: 4,
-  },
   sendButton: {
     width: 36,
     height: 36,
@@ -805,6 +800,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 8,
   },
   sendButtonDisabled: {
     backgroundColor: '#D1D5DB',

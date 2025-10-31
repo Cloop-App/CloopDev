@@ -36,12 +36,12 @@ router.get('/', authenticateToken, async (req, res) => {
         is_completed: true
       },
       include: {
-        subjects: {
+        subject_id_rel: {
           select: {
             name: true
           }
         },
-        chapters: {
+        chapter_id_rel: {
           select: {
             title: true
           }
@@ -49,41 +49,30 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     });
 
-    // Get topic chat activity (to determine active/weak topics)
-    const topicChatActivity = await prisma.topic_chats.groupBy({
-      by: ['topic_id'],
-      where: {
-        user_id: user_id
-      },
-      _count: {
-        id: true
-      },
-      orderBy: {
-        _count: {
-          id: 'desc'
-        }
-      }
-    });
-
-    // Get topic details for chat activity
-    const topicIds = topicChatActivity.map(activity => activity.topic_id);
-    const topicDetails = await prisma.topics.findMany({
-      where: {
-        id: { in: topicIds }
-      },
+    // Get topic chat activity via chat_goal_progress (counts of chats per topic for this user)
+    const progressEntries = await prisma.chat_goal_progress.findMany({
+      where: { user_id: user_id },
       include: {
-        subjects: {
-          select: {
-            name: true
-          }
-        },
-        chapters: {
-          select: {
-            title: true
-          }
-        }
+        topic_goals: { select: { topic_id: true } }
       }
     });
+
+    // Aggregate counts per topic_id
+    const topicCountsMap = {};
+    for (const p of progressEntries) {
+      const topicId = p.topic_goals?.topic_id;
+      if (!topicId) continue;
+      topicCountsMap[topicId] = (topicCountsMap[topicId] || 0) + 1;
+    }
+
+    const topicIds = Object.keys(topicCountsMap).map(x => parseInt(x));
+    const topicDetails = topicIds.length > 0 ? await prisma.topics.findMany({
+      where: { id: { in: topicIds } },
+      include: {
+        subject_id_rel: { select: { name: true } },
+        chapter_id_rel: { select: { title: true } }
+      }
+    }) : [];
 
     // Calculate metrics
     const totalSubjects = userSubjects.length;
@@ -95,15 +84,15 @@ router.get('/', authenticateToken, async (req, res) => {
     // Determine strong and weak topics based on chat activity and completion
     const strongTopics = topicDetails
       .filter(topic => {
-        const activity = topicChatActivity.find(a => a.topic_id === topic.id);
-        return topic.is_completed && activity && activity._count.id >= 3;
+        const activityCount = topicCountsMap[topic.id] || 0;
+        return topic.is_completed && activityCount >= 3;
       })
       .slice(0, 5);
 
     const weakTopics = topicDetails
       .filter(topic => {
-        const activity = topicChatActivity.find(a => a.topic_id === topic.id);
-        return !topic.is_completed && activity && activity._count.id >= 5;
+        const activityCount = topicCountsMap[topic.id] || 0;
+        return !topic.is_completed && activityCount >= 5;
       })
       .slice(0, 5);
 
@@ -131,25 +120,25 @@ router.get('/', authenticateToken, async (req, res) => {
       strong_topics: strongTopics.map(topic => ({
         id: topic.id,
         title: topic.title,
-        subject: topic.subjects.name,
-        chapter: topic.chapters.title,
+        subject: topic.subject_id_rel?.name || null,
+        chapter: topic.chapter_id_rel?.title || null,
         completion_percent: parseFloat(topic.completion_percent?.toString() || '0')
       })),
       weak_topics: weakTopics.map(topic => ({
         id: topic.id,
         title: topic.title,
-        subject: topic.subjects.name,
-        chapter: topic.chapters.title,
-        chat_count: topicChatActivity.find(a => a.topic_id === topic.id)?._count.id || 0
+        subject: topic.subject_id_rel?.name || null,
+        chapter: topic.chapter_id_rel?.title || null,
+        chat_count: topicCountsMap[topic.id] || 0
       })),
       activity: {
-        total_chat_sessions: topicChatActivity.length,
+        total_chat_sessions: Object.keys(topicCountsMap).length,
         most_active_topics: topicDetails
           .map(topic => ({
             id: topic.id,
             title: topic.title,
-            subject: topic.subjects.name,
-            chat_count: topicChatActivity.find(a => a.topic_id === topic.id)?._count.id || 0
+            subject: topic.subject_id_rel?.name || null,
+            chat_count: topicCountsMap[topic.id] || 0
           }))
           .sort((a, b) => b.chat_count - a.chat_count)
           .slice(0, 5)

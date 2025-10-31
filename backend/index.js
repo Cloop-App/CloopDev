@@ -2,7 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const dotenv = require('dotenv')
 const path = require('path')
-const { checkAndProcessPendingGenerations } = require('./services/content-pipeline')
+const { startContinuousProcessing } = require('./services/background-processor')
 
 dotenv.config({ path: path.join(__dirname, '.env') })
 
@@ -48,22 +48,38 @@ app.use('/api/content-generation', require('./api/content-generation/content-gen
 
 const PORT = process.env.PORT || 4000
 app.listen(PORT, async () => {
-	console.log(`Backend server listening on port ${PORT}`)
+	console.log(`\n🚀 Backend server listening on port ${PORT}`)
+	console.log('=' .repeat(60))
 	
-	// Check and process pending content generation on startup
-	console.log('\nInitializing AI Pipeline...')
+	// Start continuous background processor
+	console.log('\n🔄 Initializing Content Generation Background Processor...')
 	try {
-		// Run in background to not block server startup
+		// Wait 3 seconds after server starts, then start continuous processing
 		setTimeout(async () => {
 			try {
-				await checkAndProcessPendingGenerations()
+				await startContinuousProcessing()
 			} catch (error) {
-				console.error('Error in startup pipeline check:', error)
+				console.error('❌ Error starting background processor:', error)
 			}
-		}, 3000) // Wait 3 seconds after server starts
+		}, 3000)
 	} catch (error) {
-		console.error('Failed to initialize pipeline check:', error)
+		console.error('❌ Failed to initialize background processor:', error)
 	}
+})
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+	console.log('\n\n🛑 Shutting down server...')
+	const { stopContinuousProcessing } = require('./services/background-processor')
+	stopContinuousProcessing()
+	process.exit(0)
+})
+
+process.on('SIGTERM', () => {
+	console.log('\n\n🛑 Shutting down server...')
+	const { stopContinuousProcessing } = require('./services/background-processor')
+	stopContinuousProcessing()
+	process.exit(0)
 })
 
 module.exports = app

@@ -73,7 +73,26 @@ export default function TopicScreen() {
     return '#EF4444'; // Red
   };
 
-  const renderTopicCard = (topic: Topic, index: number) => (
+  const formatTimeSpent = (seconds: number) => {
+    if (seconds === 0) return 'Not started';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes} min`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+
+  const renderTopicCard = (topic: Topic, index: number) => {
+    // Parse completion_percent properly
+    const completionPercent = Number(topic.completion_percent) || 0;
+    const timeSpentSeconds = topic.time_spent_seconds || 0;
+    
+    return (
     <Pressable 
       key={topic.id} 
       style={[
@@ -113,15 +132,15 @@ export default function TopicScreen() {
         </View>
       </View>
       
-      {Number(topic.completion_percent) > 0 && (
+      {completionPercent > 0 && (
         <View style={styles.progressSection}>
           <View style={styles.progressInfo}>
             <Text style={styles.progressText}>Progress</Text>
             <Text style={[
               styles.completionPercentage,
-              { color: getCompletionColor(Number(topic.completion_percent)) }
+              { color: getCompletionColor(completionPercent) }
             ]}>
-              {topic.completion_percent}% Complete
+              {Math.round(completionPercent)}% Complete
             </Text>
           </View>
           
@@ -130,8 +149,8 @@ export default function TopicScreen() {
               style={[
                 styles.progressBar,
                 { 
-                  width: `${topic.completion_percent}%`,
-                  backgroundColor: getCompletionColor(Number(topic.completion_percent))
+                  width: `${completionPercent}%`,
+                  backgroundColor: getCompletionColor(completionPercent)
                 }
               ]} 
             />
@@ -143,7 +162,7 @@ export default function TopicScreen() {
         <View style={styles.topicMeta}>
           <Ionicons name="time-outline" size={14} color="#6B7280" />
           <Text style={styles.metaText}>
-            Added {new Date(topic.created_at).toLocaleDateString()}
+            {formatTimeSpent(timeSpentSeconds)}
           </Text>
         </View>
         {topic.content && (
@@ -154,7 +173,7 @@ export default function TopicScreen() {
         )}
       </View>
     </Pressable>
-  );
+  )};
 
   if (loading) {
     return (

@@ -42,12 +42,17 @@ export default function SignupScreen() {
         
         const updatedQuestions = getQuestionsTemplate();
         
-        // Update grade_level options
+        // Update grade_level options: backend now returns an array of grade names (strings)
         const gradeIndex = updatedQuestions.findIndex(q => q.key === 'grade_level');
         if (gradeIndex !== -1) {
-          updatedQuestions[gradeIndex].options = options.grades.map(grade => 
-            `${grade.level}${grade.description ? ` - ${grade.description}` : ''}`
-          );
+          // options.grades may be either string[] (new) or object[] (old). Normalize to string[] for display.
+          updatedQuestions[gradeIndex].options = (options.grades || []).map((g: any) => {
+            if (typeof g === 'string') return g
+            // old shape: { id, level, description }
+            if (g.name) return g.name
+            const levelPart = g.level !== undefined ? String(g.level) : (g.id !== undefined ? String(g.id) : '')
+            return `${levelPart}${g.description ? ` - ${g.description}` : ''}`
+          })
         }
         
         // Update board options
@@ -86,13 +91,8 @@ export default function SignupScreen() {
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  // Helper functions to convert display names to IDs
-  const getGradeId = (gradeDisplay: string) => {
-    if (!optionsData?.grades) return null;
-    const gradeLevel = parseInt(gradeDisplay.split(' ')[0]);
-    const grade = optionsData.grades.find((g: any) => g.level === gradeLevel);
-    return grade?.id || null;
-  };
+  // Helper functions to convert display names to IDs (boards, languages, subjects)
+  // Note: grades are strings now and we send grade name directly in payload.
 
   const getBoardId = (boardName: string) => {
     if (!optionsData?.boards) return null;
@@ -138,17 +138,20 @@ export default function SignupScreen() {
   const submitForm = async (finalFormData: Record<string, any>) => {
     setIsLoading(true);
     addMessage("Thanks! Creating your account now, please wait...", 'bot');
-    try {
-      const payload = {
+      try {
+      // Build payload and only include fields that have values.
+      const payload: any = {
         name: finalFormData.name || '',
         email: finalFormData.email || '',
-        phone: finalFormData.phone || undefined,
-        grade_level: finalFormData.grade_level ? getGradeId(finalFormData.grade_level) : undefined,
-        board: finalFormData.board ? getBoardId(finalFormData.board) : undefined,
-        subjects: finalFormData.subjects ? getSubjectIds(finalFormData.subjects) : [],
-        preferred_language: finalFormData.preferred_language ? getLanguageId(finalFormData.preferred_language) : undefined,
-        study_goal: finalFormData.study_goal || undefined,
       };
+      if (finalFormData.phone) payload.phone = finalFormData.phone;
+      // grade_level is the grade name string now — include only if present
+      if (finalFormData.grade_level) payload.grade_level = finalFormData.grade_level;
+      if (finalFormData.board) payload.board = getBoardId(finalFormData.board);
+      if (finalFormData.subjects) payload.subjects = getSubjectIds(finalFormData.subjects);
+      if (finalFormData.preferred_language) payload.preferred_language = getLanguageId(finalFormData.preferred_language);
+      if (finalFormData.study_goal) payload.study_goal = finalFormData.study_goal;
+
       await signupUser(payload as any);
       addMessage('Success! Your account has been created. Please sign in to continue...', 'bot');
       setTimeout(() => router.push('/login-sigup/login'), 1500);

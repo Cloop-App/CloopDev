@@ -1,13 +1,31 @@
 const OpenAI = require('openai');
 
-const openai = new OpenAI({
-  apiKey: process.env.API_KEY_OPENAI,
-});
+let openai = null;
+try {
+  openai = new OpenAI({ apiKey: process.env.API_KEY_OPENAI });
+} catch (err) {
+  // Do not throw here to allow module to be required in environments without API key
+  console.warn('OpenAI client not initialized. Set API_KEY_OPENAI to enable API calls.');
+  openai = null;
+}
+
+/**
+ * Truncate content to save tokens while keeping essential info
+ * @param {string} content - Full content text
+ * @param {number} maxLength - Maximum character length (default: 200)
+ * @returns {string} Truncated content
+ */
+function truncateContent(content, maxLength = 200) {
+  if (!content) return '';
+  if (content.length <= maxLength) return content;
+  return content.substring(0, maxLength) + '...';
+}
 
 /**
  * Generate chapters for a specific subject, grade, and board
  */
 async function generateChapters(gradeLevel, board, subject) {
+  if (!openai) throw new Error('OpenAI client not initialized. Set API_KEY_OPENAI environment variable.');
   const prompt = `You are an educational content expert. Generate a comprehensive list of chapters for the following:
 - Grade/Class: ${gradeLevel}
 - Board: ${board}
@@ -26,7 +44,7 @@ Return ONLY the JSON array, no additional text.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4', // Update to 'gpt-5' when available
+      model: 'gpt-3.5-turbo', // Cost-effective for structured content generation
       messages: [
         {
           role: 'system',
@@ -38,13 +56,16 @@ Return ONLY the JSON array, no additional text.`;
         }
       ],
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 1500, // Reduced from 2000 - sufficient for chapter list
     });
 
     const content = response.choices[0].message.content.trim();
     // Remove markdown code blocks if present
     const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const chapters = JSON.parse(jsonContent);
+    
+    // Log token usage for monitoring
+    console.log(`✓ Chapters generated | Tokens: ${response.usage.total_tokens} (input: ${response.usage.prompt_tokens}, output: ${response.usage.completion_tokens})`);
     
     return chapters;
   } catch (error) {
@@ -57,18 +78,22 @@ Return ONLY the JSON array, no additional text.`;
  * Generate topics/exercises for a specific chapter
  */
 async function generateTopics(gradeLevel, board, subject, chapterTitle, chapterContent) {
+  if (!openai) throw new Error('OpenAI client not initialized. Set API_KEY_OPENAI environment variable.');
+  // Truncate chapter content to save tokens - we only need a brief summary
+  const chapterSummary = truncateContent(chapterContent, 150);
+  
   const prompt = `You are an educational content expert. Generate a comprehensive list of topics and exercises for the following chapter:
 - Grade/Class: ${gradeLevel}
 - Board: ${board}
 - Subject: ${subject}
 - Chapter: ${chapterTitle}
-- Chapter Description: ${chapterContent}
+- Chapter Summary: ${chapterSummary}
 
 Please provide a JSON array of topics/exercises with the following structure:
 [
   {
     "title": "Topic/Exercise title",
-    "content": "Detailed description of the topic or exercise content"
+    "content": "Brief description of the topic (2-3 sentences)"
   }
 ]
 
@@ -77,7 +102,7 @@ Return ONLY the JSON array, no additional text.`;
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4', // Update to 'gpt-5' when available
+      model: 'gpt-3.5-turbo', // Cost-effective for structured content generation
       messages: [
         {
           role: 'system',
@@ -89,13 +114,16 @@ Return ONLY the JSON array, no additional text.`;
         }
       ],
       temperature: 0.7,
-      max_tokens: 3000,
+      max_tokens: 2000, // Reduced from 3000 - sufficient for topic list
     });
 
     const content = response.choices[0].message.content.trim();
     // Remove markdown code blocks if present
     const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const topics = JSON.parse(jsonContent);
+    
+    // Log token usage for monitoring
+    console.log(`✓ Topics generated | Tokens: ${response.usage.total_tokens} (input: ${response.usage.prompt_tokens}, output: ${response.usage.completion_tokens})`);
     
     return topics;
   } catch (error) {
@@ -105,62 +133,78 @@ Return ONLY the JSON array, no additional text.`;
 }
 
 /**
- * Generate AI response for topic-specific chat
- * Uses the topic content as context to provide relevant answers
+ * Generate clear, measurable learning goals for a topic
+ * Returns: { goals: [ { title: string, description: string }, ... ] }
  */
-async function generateTopicChatResponse(userMessage, topicTitle, topicContent, chatHistory = []) {
+async function generateTopicGoals(topicTitle, topicContent) {
+  if (!openai) throw new Error('OpenAI client not initialized. Set API_KEY_OPENAI environment variable.');
+  const topicSummary = truncateContent(topicContent, 250);
+
+  const prompt = `You are an expert curriculum designer. For the following topic, generate a list of clear, measurable learning goals (minimum 4). Use specific action verbs (e.g., identify, describe, analyze, demonstrate). Provide the response as a JSON object with the shape:\n{ "goals": [ { "title": "Goal title (short)", "description": "One-sentence measurable description" }, ... ] }\n\nTopic: ${topicTitle}\nSummary: ${topicSummary}\n\nReturn ONLY valid JSON.`;
+
   try {
-    // Build conversation history for context
-    const messages = [
-      {
-        role: 'system',
-        content: `You are an expert educational AI assistant helping students learn about "${topicTitle}". 
+    const response = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert educational content generator that creates clear, measurable learning objectives. Always respond with valid JSON only.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+    });
 
-Topic Content: ${topicContent}
+    const content = response.choices[0].message.content.trim();
+    const jsonContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
-Your role is to:
-1. Answer questions specifically about this topic
-2. Provide clear, educational explanations
-3. Use examples and analogies when helpful
-4. Encourage critical thinking
-5. Stay focused on the topic at hand
-6. If the user asks about something unrelated to this topic, gently redirect them back to the topic
-
-Keep your responses concise, friendly, and educational. Use simple language appropriate for students.`
+    let parsed = null;
+    try {
+      parsed = JSON.parse(jsonContent);
+    } catch (err) {
+      // If parsing fails, try to recover by extracting the first JSON-looking substring
+      const match = jsonContent.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsed = JSON.parse(match[0]);
+      } else {
+        throw err;
       }
-    ];
-
-    // Add recent chat history for context (last 10 messages)
-    const recentHistory = chatHistory.slice(-10);
-    for (const msg of recentHistory) {
-      messages.push({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.message || ''
-      });
     }
 
-    // Add current user message
-    messages.push({
-      role: 'user',
-      content: userMessage
-    });
+    // Normalise to { goals: [...] }
+    let goalsArray = [];
+    if (Array.isArray(parsed)) {
+      goalsArray = parsed;
+    } else if (parsed && Array.isArray(parsed.goals)) {
+      goalsArray = parsed.goals;
+    } else if (parsed && parsed.items && Array.isArray(parsed.items)) {
+      goalsArray = parsed.items;
+    }
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4', // Using GPT-4 for better reasoning
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 500,
-    });
+    // Ensure each goal has title & description
+    goalsArray = goalsArray.map(g => ({
+      title: (g.title || g.name || '').toString().trim(),
+      description: (g.description || g.desc || '').toString().trim(),
+    })).filter(g => g.title || g.description);
 
-    return response.choices[0].message.content.trim();
+    console.log(`✓ Goals generated | Tokens: ${response.usage.total_tokens} (input: ${response.usage.prompt_tokens}, output: ${response.usage.completion_tokens})`);
+
+    return { goals: goalsArray };
   } catch (error) {
-    console.error('Error generating topic chat response:', error);
-    throw new Error(`Failed to generate chat response: ${error.message}`);
+    console.error('Error generating topic goals:', error);
+    throw new Error(`Failed to generate topic goals: ${error.message}`);
   }
 }
+
+// Topic chat conversation functions moved to topic_chat.js service
+// This file now focuses only on content generation (chapters and topics)
 
 module.exports = {
   generateChapters,
   generateTopics,
-  generateTopicChatResponse,
+  generateTopicGoals,
 };

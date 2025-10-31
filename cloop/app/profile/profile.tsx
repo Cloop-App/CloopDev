@@ -8,7 +8,7 @@ import { fetchAllSubjects, addUserSubject, removeUserSubject, getAvailableSubjec
 
 export default function ProfileScreen() {
 	const router = useRouter()
-	const { isAuthenticated, user, token } = useAuth()
+	const { isAuthenticated, user, token, logout } = useAuth()
 	const [profile, setProfile] = useState<UserProfile | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
@@ -17,29 +17,79 @@ export default function ProfileScreen() {
 	const [loadingSubjects, setLoadingSubjects] = useState(false)
 	const [actionLoading, setActionLoading] = useState<number | null>(null)
 
+	// Dedicated logout handler
+	const handleLogout = async () => {
+		console.log('🔓 Logout initiated...')
+		
+		try {
+			// Call the logout function from AuthContext
+			await logout()
+			console.log('✅ Logout successful, auth state cleared')
+		} catch (error) {
+			console.error('❌ Logout error:', error)
+			// Continue with navigation even if logout fails
+		}
+
+		// Always navigate to login regardless of logout success/failure
+		console.log('🧭 Navigating to login screen...')
+		
+		try {
+			// Try different navigation methods for better reliability
+			router.replace('/login-sigup/login')
+		} catch (navError) {
+			console.error('❌ Navigation error with replace, trying push:', navError)
+			try {
+				router.push('/login-sigup/login')
+			} catch (pushError) {
+				console.error('❌ Navigation error with push:', pushError)
+				// Last resort - refresh the page (for web) or force navigation
+				if (typeof window !== 'undefined') {
+					window.location.href = '/login-sigup/login'
+				}
+			}
+		}
+	}
+
 	useEffect(() => {
+		console.log('🔍 Auth state changed:', { isAuthenticated, user: user?.email })
 		if (!isAuthenticated) {
+			console.log('🚪 User not authenticated, redirecting to login...')
 			router.replace('/login-sigup/login')
 			return
 		}
-	}, [isAuthenticated, router])
+	}, [isAuthenticated, router, user])
 
 	useEffect(() => {
-		if (!isAuthenticated || !user) return
+		console.log('📊 Profile loading effect triggered:', { 
+			isAuthenticated, 
+			hasUser: !!user, 
+			hasToken: !!token 
+		})
+		
+		if (!isAuthenticated || !user) {
+			console.log('⏭️ Skipping profile load - not authenticated or no user')
+			return
+		}
 
 		let mounted = true
 		setLoading(true)
 		setError(null)
 
+		console.log('🔄 Fetching user profile for:', user.email)
+		
 		// Use the authenticated user's ID and token
 		fetchUserProfile({ 
 			userId: user.user_id, 
 			token: token || undefined 
 		})
 			.then((p) => {
-				if (mounted) setProfile(p)
+				if (mounted) {
+					console.log('✅ Profile loaded successfully:', p.name)
+					setProfile(p)
+				}
 			})
 			.catch((err) => {
+				console.error('❌ Profile load error:', err)
 				if (mounted) setError(err.message || 'Failed to load profile')
 			})
 			.finally(() => {
@@ -169,8 +219,48 @@ export default function ProfileScreen() {
 			: { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=10B981&color=fff&size=256` }
 
 	return (
-		<ScrollView style={styles.container} contentContainerStyle={styles.content}>
-			<View style={styles.header}>
+		<View style={styles.container}>
+			{/* Header with back and logout buttons */}
+			<View style={styles.topHeader}>
+				<Pressable 
+					style={styles.headerButton}
+					onPress={() => router.back()}
+				>
+					<Ionicons name="arrow-back" size={24} color="#111827" />
+				</Pressable>
+				<Text style={styles.headerTitle}>Profile</Text>
+				<Pressable 
+					style={styles.logoutButton}
+					onPress={() => {
+						Alert.alert(
+							'Logout',
+							'Are you sure you want to logout?',
+							[
+								{ text: 'Cancel', style: 'cancel' },
+								{ 
+									text: 'Logout', 
+									style: 'destructive',
+									onPress: async () => {
+										try {
+											await logout()
+											router.replace('/login-sigup/login')
+										} catch (error) {
+											console.error('Header logout error:', error)
+											// Force logout even if there's an error
+											router.replace('/login-sigup/login')
+										}
+									}
+								}
+							]
+						)
+					}}
+				>
+					<Ionicons name="log-out-outline" size={24} color="#ef4444" />
+				</Pressable>
+			</View>
+
+			<ScrollView style={styles.scrollContainer} contentContainerStyle={styles.content}>
+				<View style={styles.profileHeader}>
 				<Image source={avatarSource} style={styles.avatar} />
 				<View style={styles.headerText}>
 					<Text style={styles.name}>{profile.name}</Text>
@@ -249,12 +339,45 @@ export default function ProfileScreen() {
 				</View>
 			</View>
 
-			<View style={styles.sectionFooter}>
-				<Pressable style={styles.editButton} onPress={() => { /* navigate to edit screen if exists */ }}>
-					<Text style={styles.editButtonText}>Edit profile</Text>
-				</Pressable>
-				<Text style={styles.footerText}>Member since {new Date(profile.created_at).toDateString()}</Text>
-			</View>
+				<View style={styles.sectionFooter}>
+					<Pressable style={styles.editButton} onPress={() => { /* navigate to edit screen if exists */ }}>
+						<Ionicons name="create-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+						<Text style={styles.editButtonText}>Edit Profile</Text>
+					</Pressable>
+					
+					<Pressable 
+						style={styles.logoutButtonMain} 
+						onPress={() => {
+							Alert.alert(
+								'Logout',
+								'Are you sure you want to logout?',
+								[
+									{ text: 'Cancel', style: 'cancel' },
+									{ 
+										text: 'Logout', 
+										style: 'destructive',
+										onPress: async () => {
+											try {
+												await logout()
+												router.replace('/login-sigup/login')
+											} catch (error) {
+												console.error('Main logout error:', error)
+												// Force logout even if there's an error
+												router.replace('/login-sigup/login')
+											}
+										}
+									}
+								]
+							)
+						}}
+					>
+						<Ionicons name="log-out-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+						<Text style={styles.logoutButtonMainText}>Logout</Text>
+					</Pressable>
+					
+					<Text style={styles.footerText}>Member since {new Date(profile.created_at).toDateString()}</Text>
+				</View>
+			</ScrollView>
 
 			{/* Add Subject Modal */}
 			<Modal
@@ -306,32 +429,82 @@ export default function ProfileScreen() {
 					</View>
 				</View>
 			</Modal>
-		</ScrollView>
+		</View>
 	)
 }
 
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
+		backgroundColor: '#f8fafc',
+	},
+	topHeader: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingHorizontal: 20,
+		paddingTop: 60,
+		paddingBottom: 20,
 		backgroundColor: '#ffffff',
+		borderBottomWidth: 1,
+		borderBottomColor: '#e5e7eb',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.05,
+		shadowRadius: 4,
+		elevation: 2,
+	},
+	headerButton: {
+		padding: 8,
+		borderRadius: 8,
+		backgroundColor: '#f3f4f6',
+	},
+	headerTitle: {
+		fontSize: 20,
+		fontWeight: '700',
+		color: '#111827',
+	},
+	logoutButton: {
+		padding: 8,
+		borderRadius: 8,
+		backgroundColor: '#fef2f2',
+	},
+	scrollContainer: {
+		flex: 1,
 	},
 	content: {
 		padding: 20,
+		paddingBottom: 40,
 	},
 	center: {
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
-	header: {
+	profileHeader: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		marginBottom: 18,
+		marginBottom: 24,
+		backgroundColor: '#ffffff',
+		padding: 20,
+		borderRadius: 16,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.05,
+		shadowRadius: 8,
+		elevation: 3,
 	},
 	avatar: {
-		width: 88,
-		height: 88,
-		borderRadius: 44,
+		width: 100,
+		height: 100,
+		borderRadius: 50,
 		backgroundColor: '#f3f4f6',
+		borderWidth: 4,
+		borderColor: '#ffffff',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.1,
+		shadowRadius: 12,
+		elevation: 4,
 	},
 	headerText: {
 		marginLeft: 14,
@@ -349,15 +522,20 @@ const styles = StyleSheet.create({
 	cardRow: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
-		marginBottom: 18,
+		marginBottom: 24,
+		gap: 12,
 	},
 	statCard: {
 		flex: 1,
-		backgroundColor: '#f9fafb',
-		padding: 14,
-		borderRadius: 10,
+		backgroundColor: '#ffffff',
+		padding: 20,
+		borderRadius: 16,
 		alignItems: 'center',
-		marginHorizontal: 6,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.05,
+		shadowRadius: 8,
+		elevation: 3,
 	},
 	statNumber: {
 		fontSize: 18,
@@ -371,9 +549,14 @@ const styles = StyleSheet.create({
 	},
 	section: {
 		backgroundColor: '#ffffff',
-		paddingVertical: 10,
-		paddingHorizontal: 6,
-		marginBottom: 12,
+		padding: 20,
+		borderRadius: 16,
+		marginBottom: 16,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.05,
+		shadowRadius: 8,
+		elevation: 3,
 	},
 	sectionTitle: {
 		fontSize: 16,
@@ -405,17 +588,26 @@ const styles = StyleSheet.create({
 	},
 	editButton: {
 		backgroundColor: '#2563eb',
-		paddingVertical: 12,
-		paddingHorizontal: 16,
-		borderRadius: 8,
+		flexDirection: 'row',
 		alignItems: 'center',
+		justifyContent: 'center',
+		paddingVertical: 14,
+		paddingHorizontal: 20,
+		borderRadius: 12,
+		shadowColor: '#2563eb',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.3,
+		shadowRadius: 8,
+		elevation: 4,
 	},
 	editButtonText: {
 		color: '#fff',
 		fontWeight: '600',
+		fontSize: 16,
 	},
 	sectionFooter: {
 		marginTop: 18,
+		gap: 12,
 	},
 	footerText: {
 		marginTop: 10,
@@ -453,12 +645,14 @@ const styles = StyleSheet.create({
 		gap: 8,
 	},
 	subjectCard: {
-		backgroundColor: '#f9fafb',
-		padding: 12,
-		borderRadius: 8,
+		backgroundColor: '#f8fafc',
+		padding: 16,
+		borderRadius: 12,
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
+		borderWidth: 1,
+		borderColor: '#e2e8f0',
 	},
 	subjectInfo: {
 		flex: 1,
@@ -491,10 +685,15 @@ const styles = StyleSheet.create({
 	},
 	modalContent: {
 		backgroundColor: '#fff',
-		borderRadius: 12,
+		borderRadius: 20,
 		width: '90%',
 		maxHeight: '80%',
 		padding: 0,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 10 },
+		shadowOpacity: 0.25,
+		shadowRadius: 20,
+		elevation: 10,
 	},
 	modalHeader: {
 		flexDirection: 'row',
@@ -546,5 +745,25 @@ const styles = StyleSheet.create({
 		textAlign: 'center',
 		color: '#6b7280',
 		fontSize: 14,
+	},
+	logoutButtonMain: {
+		backgroundColor: '#ef4444',
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		paddingVertical: 14,
+		paddingHorizontal: 20,
+		borderRadius: 12,
+		marginTop: 8,
+		shadowColor: '#ef4444',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.3,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+	logoutButtonMainText: {
+		color: '#fff',
+		fontWeight: '600',
+		fontSize: 16,
 	},
 })

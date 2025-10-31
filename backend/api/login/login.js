@@ -71,11 +71,32 @@ router.get('/users/:id', async (req, res) => {
 				user_id: true,
 				name: true,
 				email: true,
-				class: true,
-				num_subjects: true,
 				created_at: true,
 				num_chats: true,
 				num_lessons: true,
+				grade_level: {
+					select: {
+						id: true,
+						code: true,
+						name: true
+					}
+				},
+				board: {
+					select: {
+						id: true,
+						code: true,
+						name: true,
+						country: true
+					}
+				},
+				preferred_language: {
+					select: {
+						id: true,
+						code: true,
+						name: true,
+						native_name: true
+					}
+				}
 			}
 		})
 
@@ -92,15 +113,15 @@ router.put('/users/:id', async (req, res) => {
 	const id = Number(req.params.id)
 	if (!id) return res.status(400).json({ error: 'invalid id' })
 
-	const { name, grade_level, board, subjects, preferred_language, study_goal, phone } = req.body
+	const { name, grade_level_id, board_id, subjects, language_id, study_goal, phone } = req.body
 
 	try {
 		const data = {}
 		if (name) data.name = name
-		if (grade_level !== undefined) data.grade_level = grade_level
-		if (board !== undefined) data.board = board
+		if (grade_level_id !== undefined) data.grade_level_id = grade_level_id
+		if (board_id !== undefined) data.board_id = board_id
 		if (subjects !== undefined) data.subjects = subjects
-		if (preferred_language !== undefined) data.preferred_language = preferred_language
+		if (language_id !== undefined) data.language_id = language_id
 		if (study_goal !== undefined) data.study_goal = study_goal
 		if (phone !== undefined) data.phone = phone
 
