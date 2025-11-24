@@ -7,6 +7,7 @@ export interface TopicChatMessage {
   message_type?: string; // text, options, formula, video, session_summary
   options?: string[];
   diff_html?: string;
+  emoji?: string; // NEW: Emoji engagement feedback
   file_url?: string;
   file_type?: string;
   created_at: string;

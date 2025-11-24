@@ -42,7 +42,12 @@ export default function MessageBubble({
   // --- DYNAMIC COLOR LOGIC ---
   // This correctly sets the bubble color based on feedback
   const getDynamicBubbleColor = () => {
-    // Use the same base background for both user and AI messages so bubbles look identical
+    // For user_correction messages, NEVER change the bubble background color
+    // Only the text inside (strikethrough/inserts) should be colored
+    if (messageType === 'user_correction' && isUser) {
+      return '#F3F4F6'; // Always keep neutral gray background for user corrections
+    }
+    // For AI messages or other message types, apply color if needed
     if (bubbleColor === 'green') return '#bfe4d8ff'; // Correct green
     if (bubbleColor === 'red') return '#fee2e2'; // Incorrect red
     return '#F3F4F6'; // Neutral light gray for both user and AI
@@ -58,8 +63,29 @@ export default function MessageBubble({
 
   const renderMessageContent = () => {
     // Session Summary Card
-    if (messageType === 'session_summary' && sessionSummary) {
-      return <SessionSummaryCard summary={sessionSummary} />;
+    if (messageType === 'session_summary') {
+      // Parse session_metrics from diff_html if it exists
+      let metrics = sessionSummary;
+      if (!metrics && diffHtml) {
+        try {
+          metrics = JSON.parse(diffHtml);
+        } catch (e) {
+          console.error('Failed to parse session metrics:', e);
+        }
+      }
+      
+      if (metrics) {
+        return <SessionSummaryCard summary={metrics} onOptionSelect={onOptionSelect} chatId={chatId} />;
+      }
+      
+      // Fallback: show formatted message if no metrics
+      return (
+        <View>
+          <Text style={[styles.messageText, { color: getDynamicTextColor() }]}>
+            {message}
+          </Text>
+        </View>
+      );
     }
 
     // --- THIS IS THE LOGIC THAT FIXES YOUR PROBLEM ---
@@ -72,36 +98,41 @@ export default function MessageBubble({
           {/* Step 1: Show original message (if correct) or diff (if incorrect) */}
           {isCorrect ? (
             // Answer is correct (green bubble)
-            <Text style={[styles.messageText, { color: getDynamicTextColor() }]}>
-              {message}
-            </Text>
+            <View>
+              {emoji && (
+                <Text style={styles.emojiIcon}>{emoji}</Text>
+              )}
+              <Text style={[styles.messageText, { color: getDynamicTextColor() }]}>
+                {message}
+              </Text>
+            </View>
           ) : (
             // Answer is incorrect (red bubble)
             diffHtml && (
               <View style={styles.correctionContainer}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
-                  <Text style={{ marginLeft: 6, color: '#EF4444', fontSize: 12, fontWeight: '500' }}>
-                    Correction Needed
+                {/* This maps the <del> and <ins> tags to styled text with emoji at end */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+                  <Text style={[styles.correctionText, { flex: 1 }]}>
+                    {diffHtml.split(/(<del>.*?<\/del>|<ins>.*?<\/ins>)/g).map((part, index) => {
+                      if (part.startsWith('<del>')) {
+                        const text = part.replace(/<\/?del>/g, '');
+                        return (
+                          <Text key={index} style={styles.deletedText}>{text}</Text>
+                        );
+                      } else if (part.startsWith('<ins>')) {
+                        const text = part.replace(/<\/?ins>/g, '');
+                        return (
+                          <Text key={index} style={styles.insertedText}>{text}</Text>
+                        );
+                      }
+                      return <Text key={index}>{part}</Text>;
+                    })}
                   </Text>
+                  {/* Emoji at the right edge of correction box */}
+                  {emoji && (
+                    <Text style={styles.emojiInline}>{emoji}</Text>
+                  )}
                 </View>
-                {/* This maps the <del> and <ins> tags to styled text */}
-                <Text style={styles.correctionText}>
-                  {diffHtml.split(/(<del>.*?<\/del>|<ins>.*?<\/ins>)/g).map((part, index) => {
-                    if (part.startsWith('<del>')) {
-                      const text = part.replace(/<\/?del>/g, '');
-                      return (
-                        <Text key={index} style={styles.deletedText}>{text}</Text>
-                      );
-                    } else if (part.startsWith('<ins>')) {
-                      const text = part.replace(/<\/?ins>/g, '');
-                      return (
-                        <Text key={index} style={styles.insertedText}>{text}</Text>
-                      );
-                    }
-                    return <Text key={index}>{part}</Text>;
-                  })}
-                </Text>
               </View>
             )
           )}
@@ -110,30 +141,40 @@ export default function MessageBubble({
           {completeAnswer && (
             <Text style={[
               styles.completeAnswerText,
-              { marginTop: 12 },
+              { marginTop: 6 },
               isCorrect ? styles.correctAnswerText : styles.incorrectAnswerText
             ]}>
               {completeAnswer}
             </Text>
           )}
 
-          {/* Step 3: Show the options (always show two canonical options if none provided) */}
+          {/* Step 3: Show the options without emoji (emoji is in correction box now) */}
           {localOptions && localOptions.length > 0 && (
-            <View style={[styles.optionsContainer, { marginTop: 16 }]}>
-              {localOptions.map((option, index) => (
-                <Pressable
-                  key={index}
-                  style={[styles.optionButton, index === 0 ? styles.gotItButton : styles.confusedButton]}
-                  onPress={() => onOptionSelect?.(option, chatId)}
-                >
-                  {index === 0 ? (
-                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                  ) : (
-                    <Ionicons name="help-circle" size={20} color="#EF4444" />
-                  )}
-                  <Text style={[styles.optionText, index === 1 && styles.confusedText]}>{option}</Text>
-                </Pressable>
-              ))}
+            <View style={{ marginTop: 8 }}>
+              <View style={styles.optionsContainer}>
+                {localOptions.map((option, index) => {
+                  const isGotIt = option === 'Got it';
+                  const isExplain = option === 'Explain' || option === 'Explain more';
+                  return (
+                    <Pressable
+                      key={index}
+                      style={[
+                        styles.optionButton, 
+                        isGotIt && styles.gotItButton,
+                        isExplain && styles.explainButton
+                      ]}
+                      onPress={() => onOptionSelect?.(option, chatId)}
+                    >
+                      {isGotIt ? (
+                        <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                      ) : (
+                        <Ionicons name="bulb" size={16} color="#3B82F6" />
+                      )}
+                      <Text style={[styles.optionText, isExplain && styles.explainText]}>{option}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           )}
         </View>
@@ -147,6 +188,34 @@ export default function MessageBubble({
         <Text style={[styles.messageText, { color: getDynamicTextColor() }]}>
           {message}
         </Text>
+        
+        {/* Show options if this message has them (for AI explanations) */}
+        {options && options.length > 0 && !isUser && (
+          <View style={[styles.optionsContainer, { marginTop: 12 }]}>
+            {options.map((option, index) => {
+              const isGotIt = option === 'Got it';
+              const isExplain = option === 'Explain' || option === 'Explain more';
+              return (
+                <Pressable
+                  key={index}
+                  style={[
+                    styles.optionButton,
+                    isGotIt && styles.gotItButton,
+                    isExplain && styles.explainButton
+                  ]}
+                  onPress={() => onOptionSelect?.(option, chatId)}
+                >
+                  {isGotIt ? (
+                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                  ) : (
+                    <Ionicons name="bulb" size={20} color="#3B82F6" />
+                  )}
+                  <Text style={[styles.optionText, isExplain && styles.explainText]}>{option}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   };
@@ -182,18 +251,31 @@ export default function MessageBubble({
 
 // --- Component for end-of-session summary ---
 // This is needed for `messageType: 'session_summary'`
-function SessionSummaryCard({ summary }: { summary: any }) {
+function SessionSummaryCard({ summary, onOptionSelect, chatId }: { 
+  summary: any; 
+  onOptionSelect?: (option: string, chatId?: number) => void;
+  chatId?: number;
+}) {
   const { 
     total_questions = 0, 
     correct_answers = 0, 
     incorrect_answers = 0,
     star_rating = 0,
-    performance_percent = 0
+    performance_percent = 0,
+    overall_score_percent = 0,
+    performance_level = 'Good',
+    performance_color = '#10B981',
+    top_error_types = [],
+    weak_goals = [],
+    has_weak_areas = false
   } = summary;
 
+  const scorePercent = overall_score_percent || performance_percent;
+
   const getPerformanceColor = () => {
-    if (performance_percent >= 80) return '#10B981';
-    if (performance_percent >= 50) return '#F59E0B';
+    if (performance_color) return performance_color;
+    if (scorePercent >= 80) return '#10B981';
+    if (scorePercent >= 50) return '#F59E0B';
     return '#EF4444';
   };
 
@@ -201,8 +283,9 @@ function SessionSummaryCard({ summary }: { summary: any }) {
     <View style={styles.summaryCard}>
       <View style={styles.summaryHeader}>
         <Text style={styles.summaryTitle}>🎓 Session Complete!</Text>
+        <Text style={styles.performanceLevel}>{performance_level}</Text>
         <View style={styles.starContainer}>
-          {[...Array(3)].map((_, i) => (
+          {[...Array(5)].map((_, i) => (
             <Text key={i} style={styles.starIcon}>
               {i < star_rating ? '⭐' : '☆'}
             </Text>
@@ -212,7 +295,7 @@ function SessionSummaryCard({ summary }: { summary: any }) {
 
       <View style={styles.performanceSection}>
         <Text style={[styles.performanceText, { color: getPerformanceColor() }]}>
-          {performance_percent}% Score
+          {scorePercent}% Score
         </Text>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
@@ -229,7 +312,60 @@ function SessionSummaryCard({ summary }: { summary: any }) {
           </View>
         </View>
       </View>
-      {/* You can add back the 'error_types', 'learning_gaps', etc. here if you need them */}
+
+      {/* Error Types Section */}
+      {top_error_types && top_error_types.length > 0 && (
+        <View style={styles.errorSection}>
+          <Text style={styles.sectionTitle}>📊 Common Mistakes</Text>
+          {top_error_types.slice(0, 3).map((error: any, index: number) => (
+            <View key={index} style={styles.errorItem}>
+              <Text style={styles.errorType}>• {error.type}</Text>
+              <Text style={styles.errorCount}>{error.count} times ({error.percent}%)</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Weak Areas Section */}
+      {has_weak_areas && weak_goals && weak_goals.length > 0 && (
+        <View style={styles.weakSection}>
+          <Text style={styles.sectionTitle}>💡 Areas to Improve</Text>
+          {weak_goals.map((goal: any, index: number) => (
+            <View key={index} style={styles.weakItem}>
+              <Text style={styles.weakGoalTitle}>• {goal.goal_title}</Text>
+              <Text style={styles.weakGoalScore}>{goal.score_percent}%</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Action Message */}
+      <View style={styles.actionMessage}>
+        <Text style={styles.actionText}>
+          {has_weak_areas 
+            ? '💪 Want to strengthen your weak areas? Click "Learn More" below!'
+            : '🎉 Excellent work! You\'ve mastered all concepts!'}
+        </Text>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.sessionOptionsContainer}>
+        <Pressable 
+          style={[styles.sessionOptionButton, styles.endSessionButton]}
+          onPress={() => onOptionSelect?.('End Session', chatId)}
+        >
+          <Text style={styles.endSessionText}>✓ End Session</Text>
+        </Pressable>
+        
+        {has_weak_areas && (
+          <Pressable 
+            style={[styles.sessionOptionButton, styles.learnMoreButton]}
+            onPress={() => onOptionSelect?.('Learn More', chatId)}
+          >
+            <Text style={styles.learnMoreText}>📚 Learn More</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -274,17 +410,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   optionsContainer: {
-    marginTop: 12,
+    marginTop: 4,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   optionButton: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#10B981',
     flexDirection: 'row',
@@ -295,30 +431,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     flex: 1,
-    maxWidth: 160,
+    maxWidth: 120,
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   optionText: {
     color: '#10B981',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
   },
   gotItButton: {
     backgroundColor: '#E8FFF5',
   },
-  confusedButton: {
+  explainButton: {
     backgroundColor: '#FFF5F5',
-    borderColor: '#EF4444',
+    borderColor: '#3B82F6',
   },
-  confusedText: {
-    color: '#EF4444',
+  explainText: {
+    color: '#3B82F6',
   },
   // Styles for user_correction
   correctionContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 10,
+    padding: 6,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     maxWidth: '100%',
@@ -332,8 +468,8 @@ const styles = StyleSheet.create({
   completeAnswerText: {
     fontSize: 13,
     lineHeight: 18,
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 4,
     fontWeight: '500',
   },
   correctAnswerText: {
@@ -379,8 +515,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 12,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  performanceLevel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   starContainer: {
     flexDirection: 'row',
@@ -391,7 +534,7 @@ const styles = StyleSheet.create({
   },
   performanceSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   performanceText: {
     fontSize: 28,
@@ -415,5 +558,119 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginTop: 4,
+  },
+  // Error Types Section Styles
+  errorSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  errorItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  errorType: {
+    fontSize: 13,
+    color: '#4B5563',
+    flex: 1,
+  },
+  errorCount: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  // Weak Areas Section Styles
+  weakSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  weakItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  weakGoalTitle: {
+    fontSize: 13,
+    color: '#4B5563',
+    flex: 1,
+  },
+  weakGoalScore: {
+    fontSize: 13,
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  // Action Message Styles
+  actionMessage: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  actionText: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  // Session Options Buttons
+  sessionOptionsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+    justifyContent: 'center',
+  },
+  sessionOptionButton: {
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    flex: 1,
+    maxWidth: 160,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  endSessionButton: {
+    backgroundColor: '#10B981',
+  },
+  learnMoreButton: {
+    backgroundColor: '#3B82F6',
+  },
+  endSessionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  learnMoreText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  emojiIcon: {
+    fontSize: 24,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  emojiIconSmall: {
+    fontSize: 20,
+    marginRight: 6,
+  },
+  emojiInline: {
+    fontSize: 20,
+    marginLeft: 8,
+    alignSelf: 'flex-end',
   },
 });

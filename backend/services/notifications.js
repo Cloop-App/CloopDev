@@ -1,5 +1,4 @@
-const { PrismaClient } = require('../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 /**
  * Store user's Expo push token

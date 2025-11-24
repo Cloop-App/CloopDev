@@ -142,6 +142,7 @@ export default function NormalChatScreen() {
   const renderMessage = (message: NormalChatMessage, index: number) => {
     const isUser = message.sender === 'user';
     const isAI = message.sender === 'ai';
+    const hasImage = message.images && message.images.length > 0;
 
     return (
       <View key={`${message.id}-${index}`} style={[
@@ -158,9 +159,9 @@ export default function NormalChatScreen() {
           styles.messageBubble,
           isUser ? styles.userMessageBubble : styles.aiMessageBubble
         ]}>
-          {message.file_url && (
+          {hasImage && message.images && (
             <Image 
-              source={{ uri: message.file_url }}
+              source={{ uri: message.images[0] }}
               style={styles.messageImage}
               resizeMode="cover"
             />

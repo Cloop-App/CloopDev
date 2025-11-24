@@ -1,4 +1,5 @@
 import { UserProfile } from './fetch-profile'
+import { API_BASE_URL } from '../../config/api'
 
 export interface UpdateProfilePayload {
   grade_level?: string
@@ -10,10 +11,8 @@ export interface UpdateProfilePayload {
   avatar_url?: string
 }
 
-const DEFAULT_BASE = 'http://localhost:4000'
-
 export const updateUserProfile = async (payload: UpdateProfilePayload, opts?: { baseUrl?: string }) => {
-  const base = opts?.baseUrl || process.env.BACKEND_URL || DEFAULT_BASE
+  const base = opts?.baseUrl || process.env.BACKEND_URL || API_BASE_URL
   const url = new URL('/api/profile/update', base)
 
   const res = await fetch(url.toString(), {

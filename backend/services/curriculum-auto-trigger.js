@@ -1,5 +1,4 @@
-const { PrismaClient } = require('../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 /**
  * Handle user signup and create pending content generation records
@@ -241,3 +240,4 @@ module.exports = {
   handleUserSignup,
   handleProfileUpdate
 };
+

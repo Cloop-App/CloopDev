@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
 
-const { PrismaClient } = require('../../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../../lib/prisma');
 
 // GET /api/profile/metrics
 // Fetch comprehensive user metrics including progress, weak/strong topics, etc.
@@ -151,3 +150,4 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+

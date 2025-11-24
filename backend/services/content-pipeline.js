@@ -1,8 +1,6 @@
-const { PrismaClient } = require('../generated/prisma');
+const prisma = require('../lib/prisma');
 const { generateChapters, generateTopics, generateTopicGoals } = require('./openai');
 const { notifyContentGenerationStatus } = require('./notifications');
-
-const prisma = new PrismaClient();
 
 /**
  * Check if content generation is needed for a user-subject combination
@@ -638,3 +636,4 @@ module.exports = {
   generateMissingGoals,
   generateGoalsForTopic,
 };
+

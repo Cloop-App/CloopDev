@@ -1,8 +1,7 @@
 const express = require('express')
 const router = express.Router()
 
-const { PrismaClient } = require('../../generated/prisma')
-const prisma = new PrismaClient()
+const prisma = require('../../lib/prisma')
 
 // GET /api/signup/options
 // Returns all the options needed for signup form: grades, boards, subjects, languages
@@ -54,3 +53,4 @@ router.get('/', async (req, res) => {
 })
 
 module.exports = router
+

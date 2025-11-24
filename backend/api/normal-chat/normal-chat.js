@@ -2,8 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { authenticateToken } = require('../../middleware/auth')
 
-const { PrismaClient } = require('../../generated/prisma')
-const prisma = new PrismaClient()
+const prisma = require('../../lib/prisma')
 
 // OpenAI integration
 const OpenAI = require('openai')
@@ -22,8 +21,8 @@ router.get('/', authenticateToken, async (req, res) => {
 	}
 
 	try {
-		// Fetch chat messages for this user
-		const chatMessages = await prisma.user_chats.findMany({
+		// Fetch chat messages for this user from normal_user_chat
+		const chatMessages = await prisma.normal_user_chat.findMany({
 			where: {
 				user_id: user_id
 			},
@@ -34,8 +33,11 @@ router.get('/', authenticateToken, async (req, res) => {
 				id: true,
 				sender: true,
 				message: true,
-				file_url: true,
-				file_type: true,
+				message_type: true,
+				images: true,
+				videos: true,
+				links: true,
+				emoji: true,
 				created_at: true
 			}
 		})
@@ -65,21 +67,26 @@ router.post('/message', authenticateToken, async (req, res) => {
 	}
 
 	try {
-		// Create user message
-		const userMessage = await prisma.user_chats.create({
+		// Create user message in normal_user_chat
+		const userMessage = await prisma.normal_user_chat.create({
 			data: {
 				user_id: user_id,
 				sender: 'user',
 				message: message || null,
-				file_url: file_url || null,
-				file_type: file_type || null
+				message_type: 'text',
+				images: file_url ? [file_url] : [],
+				videos: [],
+				links: []
 			},
 			select: {
 				id: true,
 				sender: true,
 				message: true,
-				file_url: true,
-				file_type: true,
+				message_type: true,
+				images: true,
+				videos: true,
+				links: true,
+				emoji: true,
 				created_at: true
 			}
 		})
@@ -124,20 +131,25 @@ router.post('/message', authenticateToken, async (req, res) => {
 			aiResponseText = "I'm having trouble connecting to my knowledge base right now. Could you please try asking your question again? I'm here to help! 🤖📚"
 		}
 		
-		const aiMessage = await prisma.user_chats.create({
+		const aiMessage = await prisma.normal_user_chat.create({
 			data: {
 				user_id: user_id,
 				sender: 'ai',
 				message: aiResponseText,
-				file_url: null,
-				file_type: null
+				message_type: 'text',
+				images: [],
+				videos: [],
+				links: []
 			},
 			select: {
 				id: true,
 				sender: true,
 				message: true,
-				file_url: true,
-				file_type: true,
+				message_type: true,
+				images: true,
+				videos: true,
+				links: true,
+				emoji: true,
 				created_at: true
 			}
 		})
@@ -169,7 +181,7 @@ router.delete('/clear', authenticateToken, async (req, res) => {
 	}
 
 	try {
-		await prisma.user_chats.deleteMany({
+		await prisma.normal_user_chat.deleteMany({
 			where: {
 				user_id: user_id
 			}
@@ -183,3 +195,4 @@ router.delete('/clear', authenticateToken, async (req, res) => {
 })
 
 module.exports = router
+

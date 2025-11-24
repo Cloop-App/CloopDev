@@ -4,8 +4,7 @@ const CurriculumAutoTrigger = require('../../services/curriculum-auto-trigger')
 
 const router = express.Router()
 
-const { PrismaClient } = require('../../generated/prisma')
-const prisma = new PrismaClient()
+const prisma = require('../../lib/prisma')
 
 // POST /api/signup/
 // body: { name, email, phone?, grade_level?, board?, subjects?, preferred_language?, study_goal? }
@@ -134,3 +133,4 @@ router.post('/', async (req, res) => {
 })
 
 module.exports = router
+

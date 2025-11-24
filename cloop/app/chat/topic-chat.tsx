@@ -224,11 +224,25 @@ export default function TopicChatScreen() {
       // We just need to append AI messages and check for a summary.
 
       // Convert AI messages and add unique IDs
-      const newAIMessages = aiMsgs.map(m => ({
-        ...m,
-        id: Date.now() + Math.random(),
-        created_at: new Date().toISOString()
-      }));
+      const newAIMessages = aiMsgs.map(m => {
+        const msg: any = {
+          ...m,
+          id: Date.now() + Math.random(),
+          emoji: m.emoji || undefined,
+          created_at: new Date().toISOString()
+        };
+        
+        // If this is a session_summary message, parse metrics from diff_html
+        if (m.message_type === 'session_summary' && m.diff_html) {
+          try {
+            msg.session_summary = JSON.parse(m.diff_html);
+          } catch (e) {
+            console.error('Failed to parse session metrics from diff_html:', e);
+          }
+        }
+        
+        return msg;
+      });
 
       // If the server returned a canonical userMessage (the admin_chat row), replace the
       // local placeholder message with the server version so that fields like
@@ -244,6 +258,7 @@ export default function TopicChatScreen() {
           message_type: serverUserMessage.message_type || 'text',
           options: serverUserMessage.options || [],
           diff_html: serverUserMessage.diff_html || null,
+          emoji: serverUserMessage.emoji || undefined,
           file_url: serverUserMessage.file_url || undefined,
           file_type: serverUserMessage.file_type || undefined,
           created_at: serverUserMessage.created_at || new Date().toISOString()
@@ -336,24 +351,42 @@ export default function TopicChatScreen() {
       const data = await resp.json();
 
       // Append returned AI messages (if any)
-      const aiMsgs: TopicChatMessage[] = (data.aiMessages || []).map((m: any) => ({
-        id: m.id || Date.now() + Math.random(),
-        sender: 'ai',
-        message: m.message,
-        message_type: m.message_type || 'text',
-        options: m.options || [],
-        created_at: m.created_at || new Date().toISOString()
-      }));
+      const aiMsgs: TopicChatMessage[] = (data.aiMessages || []).map((m: any) => {
+        const msg: any = {
+          id: m.id || Date.now() + Math.random(),
+          sender: 'ai',
+          message: m.message,
+          message_type: m.message_type || 'text',
+          options: m.options || [],
+          emoji: m.emoji || undefined,
+          created_at: m.created_at || new Date().toISOString()
+        };
+        
+        // Parse session_metrics from diff_html if present
+        if (m.message_type === 'session_summary' && m.diff_html) {
+          try {
+            msg.session_summary = JSON.parse(m.diff_html);
+          } catch (e) {
+            console.error('Failed to parse session metrics from option response:', e);
+          }
+        }
+        
+        return msg;
+      });
 
       if (aiMsgs.length > 0) {
         setMessages(prev => [...prev, ...aiMsgs]);
       }
 
+      // Note: Options after "Explain" now appear on AI's last message bubble (not user_correction)
+      // The AI response includes options in the last message's options array
+
       // Optionally update feedbackMap if server returned feedback
       if (data.feedback && chatId) {
         setFeedbackMap(prev => {
           const newMap = new Map(prev);
-          newMap.set(chatId, data.feedback);
+          const existing = newMap.get(chatId) || {};
+          newMap.set(chatId, { ...existing, ...data.feedback });
           return newMap;
         });
       }
@@ -412,6 +445,11 @@ export default function TopicChatScreen() {
     if (!isUser && message.feedback) {
       bubbleColor = message.feedback.bubble_color || 'default';
       emoji = message.feedback.emoji;
+    }
+    
+    // Also check if message itself has emoji (from API response)
+    if (message.emoji && !emoji) {
+      emoji = message.emoji;
     }
 
     return (

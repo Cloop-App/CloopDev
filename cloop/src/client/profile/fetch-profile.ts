@@ -30,14 +30,14 @@ export interface UserProfile {
   created_at: string;
 }
 
-const DEFAULT_BASE = 'http://localhost:4000'
+import { API_BASE_URL } from '../../config/api'
 
 export const fetchUserProfile = async (opts?: { 
   userId?: number; 
   baseUrl?: string; 
   token?: string;
 }): Promise<UserProfile> => {
-  const base = opts?.baseUrl || process.env.BACKEND_URL || DEFAULT_BASE
+  const base = opts?.baseUrl || process.env.BACKEND_URL || API_BASE_URL
   const url = new URL('/api/profile', base)
   if (opts?.userId) url.searchParams.set('user_id', String(opts.userId))
 

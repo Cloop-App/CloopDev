@@ -8,19 +8,34 @@ dotenv.config({ path: path.join(__dirname, '.env') })
 
 const app = express()
 
-// Configure CORS for Expo development
+// Configure CORS for development and production
 const corsOptions = {
-  origin: [
-    'http://localhost:8081',        // Expo dev server
-    'http://localhost:19000',       // Alternative Expo port
-    'http://localhost:19002',       // Alternative Expo port
-    /^http:\/\/192\.168\.\d+\.\d+:8081$/, // Local network IPs for mobile devices
-    /^http:\/\/10\.\d+\.\d+\.\d+:8081$/,  // Alternative local network range
-    /^http:\/\/172\.\d+\.\d+\.\d+:8081$/, // Docker/VPN network range
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, curl)
+    if (!origin) return callback(null, true)
+    
+    const allowedOrigins = [
+      // Development
+      'http://localhost:8081',
+      'http://localhost:19000',
+      'http://localhost:19002',
+      'http://localhost:3000',
+      // Production - Add your frontend URLs here
+      process.env.FRONTEND_URL,
+    ].filter(Boolean)
+    
+    // Allow all local network IPs for development
+    const isLocalNetwork = /^http:\/\/(192\.168|10\.|172\.(1[6-9]|2[0-9]|3[01]))/.test(origin)
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || isLocalNetwork || process.env.NODE_ENV === 'development') {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }
 
 app.use(cors(corsOptions))
@@ -36,6 +51,7 @@ app.use('/api/profile', require('./api/profile/update'))
 app.use('/api/profile', require('./api/profile/manage-subjects'))
 app.use('/api/profile/chat-history', require('./api/profile/chat-history'))
 app.use('/api/profile/metrics', require('./api/profile/metrics'))
+app.use('/api/profile/learning-analytics', require('./api/profile/learning-analytics'))
 // Chapters and Topics routes
 app.use('/api/chapters', require('./api/chapters/chapters'))
 app.use('/api/topics', require('./api/topics/topics'))
@@ -47,8 +63,11 @@ app.use('/api/normal-chat', require('./api/normal-chat/normal-chat'))
 app.use('/api/content-generation', require('./api/content-generation/content-generation'))
 
 const PORT = process.env.PORT || 4000
-app.listen(PORT, async () => {
-	console.log(`\n🚀 Backend server listening on port ${PORT}`)
+const HOST = process.env.HOST || '0.0.0.0' // Listen on all network interfaces
+
+app.listen(PORT, HOST, async () => {
+	console.log(`\n🚀 Backend server listening on ${HOST}:${PORT}`)
+	console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
 	console.log('=' .repeat(60))
 	
 	// Start continuous background processor
@@ -68,17 +87,17 @@ app.listen(PORT, async () => {
 })
 
 // Graceful shutdown
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
 	console.log('\n\n🛑 Shutting down server...')
 	const { stopContinuousProcessing } = require('./services/background-processor')
-	stopContinuousProcessing()
+	await stopContinuousProcessing()
 	process.exit(0)
 })
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
 	console.log('\n\n🛑 Shutting down server...')
 	const { stopContinuousProcessing } = require('./services/background-processor')
-	stopContinuousProcessing()
+	await stopContinuousProcessing()
 	process.exit(0)
 })
 

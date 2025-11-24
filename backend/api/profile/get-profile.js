@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
 
-const { PrismaClient } = require('../../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../../lib/prisma');
 
 // GET /api/profile
 router.get('/', authenticateToken, async (req, res) => {
@@ -123,3 +122,4 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+

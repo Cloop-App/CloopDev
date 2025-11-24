@@ -2,10 +2,15 @@ import { API_BASE_URL } from '../../config/api';
 
 export interface NormalChatMessage {
   id: number;
-  sender: 'user' | 'ai';
+  sender?: string;
   message?: string;
-  file_url?: string;
-  file_type?: string;
+  message_type?: string;
+  diff_html?: string;
+  options?: string[];
+  images?: string[];
+  videos?: string[];
+  links?: string[];
+  emoji?: string;
   created_at: string;
 }
 
@@ -63,7 +68,6 @@ export const sendNormalChatMessage = async (
   messageData: {
     message?: string;
     file_url?: string;
-    file_type?: string;
   },
   opts?: { 
     userId?: number; 

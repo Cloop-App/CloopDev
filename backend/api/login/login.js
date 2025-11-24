@@ -4,8 +4,7 @@ const jwt = require('jsonwebtoken')
 
 const router = express.Router()
 
-const { PrismaClient } = require('../../generated/prisma')
-const prisma = new PrismaClient()
+const prisma = require('../../lib/prisma')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
@@ -165,3 +164,4 @@ router.delete('/users/:id', async (req, res) => {
 })
 
 module.exports = router
+

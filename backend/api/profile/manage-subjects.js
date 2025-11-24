@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
 
-const { PrismaClient } = require('../../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../../lib/prisma');
 
 // POST /api/profile/add-subject
 router.post('/add-subject', authenticateToken, async (req, res) => {
@@ -148,3 +147,4 @@ router.delete('/remove-subject', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+

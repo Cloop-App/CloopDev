@@ -2,8 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { authenticateToken } = require('../../middleware/auth')
 
-const { PrismaClient } = require('../../generated/prisma')
-const prisma = new PrismaClient()
+const prisma = require('../../lib/prisma')
 
 // GET /api/chapters/:subjectId
 // Fetch all chapters for a specific subject and user
@@ -76,3 +75,4 @@ router.get('/:subjectId', authenticateToken, async (req, res) => {
 })
 
 module.exports = router
+

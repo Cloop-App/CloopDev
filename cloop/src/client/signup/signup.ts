@@ -46,10 +46,11 @@ interface SignupOptions {
     rtl?: boolean;
   }>;
 }
+import { API_BASE_URL } from '../../config/api'
 
 export const getSignupOptions = async (): Promise<SignupOptions> => {
   try {
-    const response = await fetch('http://localhost:4000/api/signup/options', {
+    const response = await fetch(`${API_BASE_URL}/api/signup/options`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -69,7 +70,7 @@ export const getSignupOptions = async (): Promise<SignupOptions> => {
 
 export const signupUser = async (userData: SignupData): Promise<SignupResponse> => {
   try {
-    const response = await fetch('http://localhost:4000/api/signup', {
+    const response = await fetch(`${API_BASE_URL}/api/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

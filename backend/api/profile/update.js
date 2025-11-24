@@ -4,8 +4,7 @@ const { authenticateToken } = require('../../middleware/auth');
 const CurriculumAutoTrigger = require('../../services/curriculum-auto-trigger');
 const { saveExpoPushToken } = require('../../services/notifications');
 
-const { PrismaClient } = require('../../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../../lib/prisma');
 
 // PUT /api/profile/update
 router.put('/update', authenticateToken, async (req, res) => {
@@ -100,3 +99,4 @@ router.post('/push-token', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+

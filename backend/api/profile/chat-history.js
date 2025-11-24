@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
 
-const { PrismaClient } = require('../../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../../lib/prisma');
 
 // GET /api/profile/chat-history
 // Fetch user's topic chat history grouped by topics
@@ -60,3 +59,4 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+

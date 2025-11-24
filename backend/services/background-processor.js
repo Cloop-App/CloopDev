@@ -1,8 +1,8 @@
-const { PrismaClient } = require('../generated/prisma');
+const prisma = require('../lib/prisma');
 const { runContentGenerationPipeline, generateMissingGoals } = require('./content-pipeline');
 const { notifyContentGenerationStatus } = require('./notifications');
 
-const prisma = new PrismaClient();
+console.log('[background-processor] Prisma loaded:', typeof prisma, 'has contentGenerationStatus:', typeof prisma?.contentGenerationStatus);
 
 let isProcessing = false;
 let processingInterval = null;
@@ -14,6 +14,18 @@ const POLLING_INTERVAL = 30000; // Check every 30 seconds
 async function startContinuousProcessing() {
   console.log('\n🔄 Starting continuous content generation processor...');
   console.log(`⏰ Polling interval: ${POLLING_INTERVAL / 1000} seconds\n`);
+
+  console.log('[startContinuousProcessing] Prisma before connect:', typeof prisma, 'has contentGenerationStatus:', typeof prisma?.contentGenerationStatus);
+
+  // Initialize and connect Prisma
+  try {
+    await prisma.$connect();
+    console.log('✓ Database connection established');
+    console.log('[startContinuousProcessing] Prisma after connect:', typeof prisma, 'has contentGenerationStatus:', typeof prisma?.contentGenerationStatus);
+  } catch (error) {
+    console.error('❌ Failed to connect to database:', error);
+    throw error;
+  }
 
   // Run immediately on start
   await processPendingTasks();
@@ -29,11 +41,21 @@ async function startContinuousProcessing() {
 /**
  * Stop the continuous processing
  */
-function stopContinuousProcessing() {
+async function stopContinuousProcessing() {
   if (processingInterval) {
     clearInterval(processingInterval);
     processingInterval = null;
-    console.log('\n⏹️  Continuous processor stopped\n');
+    console.log('\n⏹️  Continuous processor stopped');
+  }
+  
+  // Disconnect Prisma client
+  if (prisma) {
+    try {
+      await prisma.$disconnect();
+      console.log('✓ Database connection closed\n');
+    } catch (error) {
+      console.error('❌ Error disconnecting from database:', error);
+    }
   }
 }
 
@@ -212,3 +234,4 @@ module.exports = {
   getProcessorStatus,
   triggerManualProcessing,
 };
+

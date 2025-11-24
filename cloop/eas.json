@@ -1,0 +1,12 @@
+{
+  "build": {
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://51.21.143.32:4000"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}

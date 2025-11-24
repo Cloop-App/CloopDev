@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../../middleware/auth');
 const { generateMissingGoals, generateGoalsForTopic } = require('../../services/content-pipeline');
-const { PrismaClient } = require('../../generated/prisma');
-const prisma = new PrismaClient();
+const prisma = require('../../lib/prisma');
 
 // All content generation is now handled automatically by the backend pipeline
 // Content is generated on backend startup when pending records are found
@@ -129,3 +128,4 @@ router.get('/status', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
