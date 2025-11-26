@@ -1,22 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, Image, StatusBar, ScrollView, SafeAreaView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, Image, StatusBar, ScrollView, SafeAreaView, Modal, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserProfile } from '../../src/client/profile/useUserProfile';
 import { useChatHistory } from '../../src/client/profile/useProgress';
+import { THEME } from '../../src/constants/theme';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { isAuthenticated, logout, user, isLoading } = useAuth();
-  const { 
-    profile, 
-    academicInfo, 
-    progressInfo, 
-    loading, 
+  const {
+    profile,
+    academicInfo,
+    progressInfo,
+    loading,
     error,
     isProfileComplete,
-    missingFields 
+    missingFields
   } = useUserProfile();
   const {
     chatHistory,
@@ -97,7 +98,7 @@ export default function HomeScreen() {
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <Text style={{ color: 'red', marginBottom: 10 }}>Error: {error}</Text>
         <Pressable
-          style={{ backgroundColor: '#2563eb', padding: 10, borderRadius: 5 }}
+          style={{ backgroundColor: THEME.colors.primary, padding: 10, borderRadius: 5 }}
           onPress={() => window.location.reload()}
         >
           <Text style={{ color: 'white' }}>Retry</Text>
@@ -118,7 +119,7 @@ export default function HomeScreen() {
           <View style={styles.sidebarHeader}>
             <Text style={styles.sidebarTitle}>Chat History</Text>
             <Pressable onPress={() => setShowSidebar(false)}>
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={24} color={THEME.colors.text.secondary} />
             </Pressable>
           </View>
           <ScrollView style={styles.sidebarContent}>
@@ -128,15 +129,15 @@ export default function HomeScreen() {
               <Text style={styles.errorText}>Error loading chat history</Text>
             ) : chatHistory.length > 0 ? (
               chatHistory.map((chat, index) => (
-                <Pressable 
-                  key={chat.topic_id} 
+                <Pressable
+                  key={chat.topic_id}
                   style={styles.chatHistoryItem}
                   onPress={() => {
                     setShowSidebar(false);
                     router.push(`/chat/topic-chat?topicId=${chat.topic_id}` as any);
                   }}
                 >
-                  <Ionicons name="chatbubble-outline" size={20} color="#666" />
+                  <Ionicons name="chatbubble-outline" size={20} color={THEME.colors.text.secondary} />
                   <View style={styles.chatHistoryTextContainer}>
                     <Text style={styles.chatHistoryText}>{chat.title}</Text>
                     <Text style={styles.chatHistorySubject}>{chat.subject} - {chat.chapter}</Text>
@@ -153,16 +154,16 @@ export default function HomeScreen() {
   );
 
   const renderSubjectCard = (userSubject: any, index: number) => (
-    <Pressable 
-      key={index} 
+    <Pressable
+      key={index}
       style={styles.subjectCard}
       onPress={() => router.push(`/chapter-topic/chapter?subjectId=${userSubject.subject.id}&subjectName=${encodeURIComponent(userSubject.subject.name)}` as any)}
     >
       <View style={styles.subjectIcon}>
-        <Ionicons 
-          name={getSubjectIcon(userSubject.subject.name)} 
-          size={24} 
-          color="#2563eb" 
+        <Ionicons
+          name={getSubjectIcon(userSubject.subject.name)}
+          size={24}
+          color={THEME.colors.primary}
         />
       </View>
       <Text style={styles.subjectName}>{userSubject.subject.name}</Text>
@@ -191,26 +192,26 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Pressable 
+          <Pressable
             style={styles.sidebarToggle}
             onPress={() => setShowSidebar(true)}
           >
-            <Ionicons name="menu" size={24} color="#333" />
+            <Ionicons name="menu" size={24} color={THEME.colors.text.primary} />
           </Pressable>
           <View style={styles.greetingContainer}>
             <Text style={styles.greeting}>Welcome back,</Text>
             <Text style={styles.userName}>{user?.name || 'User'}!</Text>
           </View>
         </View>
-        
+
         <View style={styles.headerRight}>
           <Pressable style={styles.headerIcon}>
-            <Ionicons name="notifications-outline" size={24} color="#333" />
+            <Ionicons name="notifications-outline" size={24} color={THEME.colors.text.primary} />
             <View style={styles.notificationBadge} />
           </Pressable>
           <Pressable
@@ -218,8 +219,8 @@ export default function HomeScreen() {
             onPress={() => router.push('/profile/profile')}
           >
             <Image
-              source={{ 
-                uri: profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10B981&color=fff&size=128` 
+              source={{
+                uri: profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=EF4444&color=fff&size=128`
               }}
               style={styles.profileAvatar}
             />
@@ -231,7 +232,7 @@ export default function HomeScreen() {
         {/* Board Information Card */}
         <View style={styles.boardCard}>
           <View style={styles.cardHeader}>
-            <Ionicons name="school-outline" size={24} color="#2563eb" />
+            <Ionicons name="school-outline" size={24} color={THEME.colors.primary} />
             <Text style={styles.cardTitle}>Your Board</Text>
           </View>
           <Text style={styles.boardName}>{academicInfo?.board || 'Not selected'}</Text>
@@ -247,8 +248,8 @@ export default function HomeScreen() {
             ) : academicInfo?.subjects && academicInfo.subjects.length > 0 ? (
               // Fallback to old subjects array for backward compatibility
               academicInfo.subjects.map((subject, index) => (
-                <Pressable 
-                  key={index} 
+                <Pressable
+                  key={index}
                   style={styles.subjectCard}
                   onPress={() => {
                     // For old subjects array, we don't have subject ID, so show a message
@@ -256,10 +257,10 @@ export default function HomeScreen() {
                   }}
                 >
                   <View style={styles.subjectIcon}>
-                    <Ionicons 
-                      name={getSubjectIcon(subject)} 
-                      size={24} 
-                      color="#2563eb" 
+                    <Ionicons
+                      name={getSubjectIcon(subject)}
+                      size={24}
+                      color={THEME.colors.primary}
                     />
                   </View>
                   <Text style={styles.subjectName}>{subject}</Text>
@@ -272,11 +273,9 @@ export default function HomeScreen() {
           </View>
         </View>
 
-
-
         {/* Live Agentic Tutor Button */}
         <View style={styles.section}>
-          <Pressable 
+          <Pressable
             style={styles.fullWidthActionButton}
             onPress={() => router.push('/chat/normal-chat' as any)}
           >
@@ -289,12 +288,12 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Track Progress</Text>
-            <Pressable 
+            <Pressable
               style={styles.viewMetricsButton}
               onPress={() => router.push('/profile/metrics' as any)}
             >
               <Text style={styles.viewMetricsText}>View Metrics</Text>
-              <Ionicons name="arrow-forward" size={16} color="#2563eb" />
+              <Ionicons name="arrow-forward" size={16} color={THEME.colors.primary} />
             </Pressable>
           </View>
           <View style={styles.trackProgressCard}>
@@ -306,11 +305,11 @@ export default function HomeScreen() {
                     <Text style={styles.trackProgressPercent}>{userSubject.completion_percent}%</Text>
                   </View>
                   <View style={styles.trackProgressBar}>
-                    <View 
+                    <View
                       style={[
-                        styles.trackProgressFill, 
+                        styles.trackProgressFill,
                         { width: `${userSubject.completion_percent}%` }
-                      ]} 
+                      ]}
                     />
                   </View>
                   <Text style={styles.trackProgressText}>
@@ -333,7 +332,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: THEME.colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -341,9 +340,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 15 : 15,
+    backgroundColor: THEME.colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: THEME.colors.border,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -358,12 +358,12 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 14,
-    color: '#666',
+    color: THEME.colors.text.secondary,
   },
   userName: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.colors.text.primary,
   },
   headerRight: {
     flexDirection: 'row',
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#ef4444',
+    backgroundColor: THEME.colors.primary,
   },
   profileButton: {
     width: 36,
@@ -416,18 +416,18 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.colors.text.primary,
     marginLeft: 8,
   },
   boardName: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#2563eb',
+    color: THEME.colors.primary,
     marginBottom: 5,
   },
   gradeLevel: {
     fontSize: 14,
-    color: '#666',
+    color: THEME.colors.text.secondary,
   },
   section: {
     marginBottom: 25,
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.colors.text.primary,
     marginBottom: 15,
   },
   subjectsGrid: {
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#FEF2F2', // Light red
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -466,22 +466,22 @@ const styles = StyleSheet.create({
   subjectName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.colors.text.primary,
     marginBottom: 5,
   },
   subjectProgress: {
     fontSize: 12,
-    color: '#666',
+    color: THEME.colors.text.secondary,
   },
   subjectCompletion: {
     fontSize: 11,
-    color: '#2563eb',
+    color: THEME.colors.primary,
     fontWeight: '500',
     marginTop: 2,
   },
   noSubjects: {
     fontSize: 14,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     fontStyle: 'italic',
   },
   quickActions: {
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   actionButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fullWidthActionButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -531,11 +531,11 @@ const styles = StyleSheet.create({
   progressNumber: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#2563eb',
+    color: THEME.colors.primary,
   },
   progressLabel: {
     fontSize: 12,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     marginTop: 5,
   },
   sidebarOverlay: {
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   sidebar: {
     width: '80%',
     height: '100%',
-    backgroundColor: '#fff',
+    backgroundColor: THEME.colors.background,
     paddingTop: 50,
   },
   sidebarHeader: {
@@ -555,12 +555,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: THEME.colors.border,
   },
   sidebarTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.colors.text.primary,
   },
   sidebarContent: {
     flex: 1,
@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    borderBottomColor: THEME.colors.border,
   },
   chatHistoryTextContainer: {
     flex: 1,
@@ -580,29 +580,29 @@ const styles = StyleSheet.create({
   },
   chatHistoryText: {
     fontSize: 14,
-    color: '#333',
+    color: THEME.colors.text.primary,
     fontWeight: '500',
   },
   chatHistorySubject: {
     fontSize: 12,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     marginTop: 2,
   },
   loadingText: {
     fontSize: 14,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     paddingVertical: 20,
   },
   errorText: {
     fontSize: 14,
-    color: '#ef4444',
+    color: THEME.colors.primary,
     textAlign: 'center',
     paddingVertical: 20,
   },
   noChatHistory: {
     fontSize: 14,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     paddingVertical: 20,
     fontStyle: 'italic',
@@ -618,12 +618,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#FEF2F2', // Light red
     borderRadius: 6,
   },
   viewMetricsText: {
     fontSize: 12,
-    color: '#2563eb',
+    color: THEME.colors.primary,
     fontWeight: '500',
     marginRight: 4,
   },
@@ -649,12 +649,12 @@ const styles = StyleSheet.create({
   trackProgressSubject: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.colors.text.primary,
   },
   trackProgressPercent: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2563eb',
+    color: THEME.colors.primary,
   },
   trackProgressBar: {
     height: 6,
@@ -664,16 +664,16 @@ const styles = StyleSheet.create({
   },
   trackProgressFill: {
     height: '100%',
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.colors.secondary, // Yellow for progress
     borderRadius: 3,
   },
   trackProgressText: {
     fontSize: 12,
-    color: '#666',
+    color: THEME.colors.text.secondary,
   },
   noProgress: {
     fontSize: 14,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     fontStyle: 'italic',
   },

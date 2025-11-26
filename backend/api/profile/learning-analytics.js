@@ -30,12 +30,12 @@ router.get('/topic/:topicId', authenticateToken, async (req, res) => {
         user_id: user_id
       },
       include: {
-        subject_id_rel: {
+        subjects: {
           select: {
             name: true
           }
         },
-        chapter_id_rel: {
+        chapters: {
           select: {
             title: true
           }
@@ -54,8 +54,8 @@ router.get('/topic/:topicId', authenticateToken, async (req, res) => {
       topic: {
         id: topic.id,
         title: topic.title,
-        subject: topic.subject_id_rel?.name,
-        chapter: topic.chapter_id_rel?.title,
+        subject: topic.subjects?.name,
+        chapter: topic.chapters?.title,
         is_completed: topic.is_completed,
         completion_percent: parseFloat(topic.completion_percent?.toString() || '0')
       },

@@ -22,8 +22,8 @@ router.get('/', authenticateToken, async (req, res) => {
           include: {
             topics: {
               include: {
-                subject_id_rel: { select: { name: true } },
-                chapter_id_rel: { select: { title: true } }
+                subjects: { select: { name: true } },
+                chapters: { select: { title: true } }
               }
             }
           }
@@ -43,8 +43,8 @@ router.get('/', authenticateToken, async (req, res) => {
       formattedHistory.push({
         topic_id: topic.id,
         title: topic.title,
-        subject: topic.subject_id_rel?.name || null,
-        chapter: topic.chapter_id_rel?.title || null,
+        subject: topic.subjects?.name || null,
+        chapter: topic.chapters?.title || null,
         last_activity: entry.created_at
       });
     }

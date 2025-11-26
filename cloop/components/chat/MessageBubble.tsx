@@ -38,7 +38,7 @@ export default function MessageBubble({
   onOptionSelect
 }: MessageBubbleProps) {
   const isUser = sender === 'user';
-  
+
   // --- DYNAMIC COLOR LOGIC ---
   // This correctly sets the bubble color based on feedback
   const getDynamicBubbleColor = () => {
@@ -73,11 +73,11 @@ export default function MessageBubble({
           console.error('Failed to parse session metrics:', e);
         }
       }
-      
+
       if (metrics) {
         return <SessionSummaryCard summary={metrics} onOptionSelect={onOptionSelect} chatId={chatId} />;
       }
-      
+
       // Fallback: show formatted message if no metrics
       return (
         <View>
@@ -112,7 +112,7 @@ export default function MessageBubble({
               <View style={styles.correctionContainer}>
                 {/* This maps the <del> and <ins> tags to styled text with emoji at end */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                  <Text style={[styles.correctionText, { flex: 1 }]}>
+                  <Text style={[styles.correctionText, { flexShrink: 1 }]}>
                     {diffHtml.split(/(<del>.*?<\/del>|<ins>.*?<\/ins>)/g).map((part, index) => {
                       if (part.startsWith('<del>')) {
                         const text = part.replace(/<\/?del>/g, '');
@@ -159,7 +159,7 @@ export default function MessageBubble({
                     <Pressable
                       key={index}
                       style={[
-                        styles.optionButton, 
+                        styles.optionButton,
                         isGotIt && styles.gotItButton,
                         isExplain && styles.explainButton
                       ]}
@@ -188,7 +188,7 @@ export default function MessageBubble({
         <Text style={[styles.messageText, { color: getDynamicTextColor() }]}>
           {message}
         </Text>
-        
+
         {/* Show options if this message has them (for AI explanations) */}
         {options && options.length > 0 && !isUser && (
           <View style={[styles.optionsContainer, { marginTop: 12 }]}>
@@ -223,12 +223,12 @@ export default function MessageBubble({
   return (
     <View>
       <View style={[
-        styles.bubble, 
+        styles.bubble,
         isUser ? styles.userBubble : styles.aiBubble,
         { backgroundColor: getDynamicBubbleColor() } // Use dynamic color
       ]}>
         {fileUrl && (
-          <Image 
+          <Image
             source={{ uri: fileUrl }}
             style={styles.messageImage}
             resizeMode="cover"
@@ -236,12 +236,12 @@ export default function MessageBubble({
         )}
         {renderMessageContent()}
         <Text style={[
-            styles.timestamp, 
-            (isUser && bubbleColor === 'default') ? styles.userTimestamp : styles.aiTimestamp
+          styles.timestamp,
+          (isUser && bubbleColor === 'default') ? styles.userTimestamp : styles.aiTimestamp
         ]}>
-          {new Date(timestamp).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+          {new Date(timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
           })}
         </Text>
       </View>
@@ -251,14 +251,14 @@ export default function MessageBubble({
 
 // --- Component for end-of-session summary ---
 // This is needed for `messageType: 'session_summary'`
-function SessionSummaryCard({ summary, onOptionSelect, chatId }: { 
-  summary: any; 
+function SessionSummaryCard({ summary, onOptionSelect, chatId }: {
+  summary: any;
   onOptionSelect?: (option: string, chatId?: number) => void;
   chatId?: number;
 }) {
-  const { 
-    total_questions = 0, 
-    correct_answers = 0, 
+  const {
+    total_questions = 0,
+    correct_answers = 0,
     incorrect_answers = 0,
     star_rating = 0,
     performance_percent = 0,
@@ -342,7 +342,7 @@ function SessionSummaryCard({ summary, onOptionSelect, chatId }: {
       {/* Action Message */}
       <View style={styles.actionMessage}>
         <Text style={styles.actionText}>
-          {has_weak_areas 
+          {has_weak_areas
             ? '💪 Want to strengthen your weak areas? Click "Learn More" below!'
             : '🎉 Excellent work! You\'ve mastered all concepts!'}
         </Text>
@@ -350,15 +350,15 @@ function SessionSummaryCard({ summary, onOptionSelect, chatId }: {
 
       {/* Action Buttons */}
       <View style={styles.sessionOptionsContainer}>
-        <Pressable 
+        <Pressable
           style={[styles.sessionOptionButton, styles.endSessionButton]}
           onPress={() => onOptionSelect?.('End Session', chatId)}
         >
           <Text style={styles.endSessionText}>✓ End Session</Text>
         </Pressable>
-        
+
         {has_weak_areas && (
-          <Pressable 
+          <Pressable
             style={[styles.sessionOptionButton, styles.learnMoreButton]}
             onPress={() => onOptionSelect?.('Learn More', chatId)}
           >

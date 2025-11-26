@@ -1,380 +1,282 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform, ScrollView, SafeAreaView } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  StatusBar,
+  Dimensions,
+  Animated,
+  Image,
+  Platform
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../src/constants/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+// Using require for local assets to ensure they are bundled
+const LOGO_IMG = require('../assets/images/logo.png');
+const HERO_IMG = require('../assets/images/hero.png');
+const TROPHY_IMG = require('../assets/images/trophy.png');
+
+const { width, height } = Dimensions.get('window');
 
 export default function Index() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
-  const [isMounted, setIsMounted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const slidesRef = useRef<any>(null);
 
-  const sections = [
-    'hero',
-    'features',
-    'capabilities',
-    'comparison',
-    'cta'
+  const slides = [
+    { id: 'hero', title: '', subtitle: '' },
+    { id: 'features', title: 'Why Students Love Cloop', subtitle: 'AI-powered learning that works' },
+    { id: 'capabilities', title: 'What Cloop Does', subtitle: 'Your personal AI tutor' },
+    { id: 'comparison', title: 'Cloop vs Others', subtitle: 'The smart choice' },
+    { id: 'cta', title: '', subtitle: '' }, // Removed title as requested
   ];
 
-  const showStyle = (i: number) => (currentIndex === i ? null : styles.hidden);
-
   useEffect(() => {
-    // Set mounted flag after component is mounted
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (isMounted && !isLoading && isAuthenticated) {
-      // Add small delay to ensure router is ready
+    if (!isLoading && isAuthenticated) {
       const timer = setTimeout(() => {
-        try {
-          router.replace('/home/home');
-        } catch (error) {
-          console.error('Navigation error:', error);
-          // Fallback navigation
-          window.location.href = '/home/home';
-        }
+        router.replace('/home/home');
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, router, isMounted, isLoading]);
+  }, [isAuthenticated, isLoading, router]);
 
-  // Show loading during auth initialization
+  const scrollTo = (index: number) => {
+    if (index >= 0 && index < slides.length) {
+      slidesRef.current?.scrollTo({ x: index * width, animated: true });
+      setCurrentIndex(index);
+    }
+  };
+
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+    {
+      useNativeDriver: false, listener: (event: any) => {
+        const index = Math.round(event.nativeEvent.contentOffset.x / width);
+        setCurrentIndex(index);
+      }
+    }
+  );
+
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-        <View style={styles.loadingContainer}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>C</Text>
-          </View>
-          <Text style={styles.brand}>Cloop</Text>
-          <Text style={styles.loadingText}>Initializing AI...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+        <Image source={LOGO_IMG} style={styles.loadingLogo} resizeMode="contain" />
+      </View>
     );
   }
 
-  return (
-    <SafeAreaView style={[
-      styles.container,
-      currentIndex === 0 && styles.containerHero,
-      currentIndex === 1 && styles.containerFeatures
-    ]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-
-      <View style={[
-        styles.pagerContainer,
-        (currentIndex === 0 || currentIndex === 1) && styles.pagerContainerNoPadding
-      ]}>
-        <View style={styles.pagerContent}>
-        {/* Upper Half - Hero & Quick Features */}
-        <View style={[styles.upperHalf, showStyle(0)]}>
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={styles.logo}>
-              <Text style={styles.logoText}>C</Text>
-            </View>
-            
-            <Text style={styles.brand}>Cloop</Text>
-            <Text style={styles.heroSubtitle}>Study Less. Score More. With Cloop.</Text>
-            
-            <View style={styles.heroDescription}>
-              <Text style={styles.heroText} numberOfLines={4} ellipsizeMode="tail">
-                India's first AI-powered learning tutor that helps you finish homework faster, prepare better for tests, and{' '}
-                <Text style={styles.highlightText}>improve your marks by up to 25%</Text> — in just 4 weeks.
-              </Text>
-            </View>
-          </View>
-
-          {/* Quick Features Grid */}
-          <View style={styles.quickFeaturesSection}>
-            <View style={styles.quickFeatureItem}>
-              <Text style={styles.quickFeatureIcon}>📚</Text>
-              <Text style={styles.quickFeatureText}>Covers your school syllabus & NCERT chapters</Text>
-            </View>
-            <View style={styles.quickFeatureItem}>
-              <Text style={styles.quickFeatureIcon}>⏱️</Text>
-              <Text style={styles.quickFeatureText}>Saves up to 50% of study time through smart revision</Text>
-            </View>
-            <View style={styles.quickFeatureItem}>
-              <Text style={styles.quickFeatureIcon}>💯</Text>
-              <Text style={styles.quickFeatureText}>Gives instant feedback on every answer you write</Text>
-            </View>
-            <View style={styles.quickFeatureItem}>
-              <Text style={styles.quickFeatureIcon}>🤖</Text>
-              <Text style={styles.quickFeatureText}>24×7 AI tutor — no waiting for teachers or tuition classes</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Why Students Love Cloop */}
-        <View style={[styles.lowerHalf, showStyle(1)]}>
-          <View style={styles.featuresSection}>
-            <Text style={styles.sectionTitle}>Why Students (and Parents) Love Cloop</Text>
-            <View style={styles.featuresGrid}>
-              <View style={styles.featureCard}>
-                <View style={styles.featureIcon}>
-                  <Ionicons name="trophy-outline" size={28} color="#F59E0B" />
-                </View>
-                <Text style={styles.featureTitle}>🧠 Improve Exam Performance</Text>
-                <Text style={styles.featureDescription} numberOfLines={4} ellipsizeMode="tail">
-                  Cloop's adaptive practice questions and instant feedback help you remember better, revise faster, and score higher — with up to 25% improvement in test performance after 3 weeks of use.
-                </Text>
-              </View>
-
-              <View style={styles.featureCard}>
-                <View style={styles.featureIcon}>
-                  <Ionicons name="time-outline" size={28} color="#10B981" />
-                </View>
-                <Text style={styles.featureTitle}>⏱ Reduce Study Time</Text>
-                <Text style={styles.featureDescription} numberOfLines={3} ellipsizeMode="tail">
-                  AI tracks your weak spots and creates short, focused revision paths — cutting your daily study time by up to 50%.
-                </Text>
-              </View>
-
-              <View style={styles.featureCard}>
-                <View style={styles.featureIcon}>
-                  <Ionicons name="checkmark-circle-outline" size={28} color="#EAB308" />
-                </View>
-                <Text style={styles.featureTitle}>🎯 Master Every Concept</Text>
-                <Text style={styles.featureDescription} numberOfLines={4} ellipsizeMode="tail">
-                  From tricky physics numericals to confusing grammar rules, Cloop corrects your mistakes in real time so you actually understand, not just memorize.
-                </Text>
-              </View>
-              {/* Removed extra feature card to reduce vertical overflow on small screens */}
-            </View>
-          </View>
-        </View>
-
-        {/* Capabilities */}
-        <View style={[styles.capabilitiesSection, showStyle(2)]}>
-          <Text style={styles.sectionTitle}>What Cloop Does for You</Text>
-          <View style={styles.capabilityItem}>
-            <View style={styles.capabilityIcon}>
-              <Ionicons name="chatbubble-ellipses" size={20} color="#F59E0B" />
-            </View>
-            <View style={styles.capabilityContent}>
-              <Text style={styles.capabilityTitle}>AI Tutor for Every Subject</Text>
-              <Text style={styles.capabilityText}>Chat with Cloop to understand Maths, Science, or English concepts instantly.</Text>
-            </View>
-          </View>
-          <View style={styles.capabilityItem}>
-            <View style={styles.capabilityIcon}>
-              <Ionicons name="book" size={20} color="#10B981" />
-            </View>
-            <View style={styles.capabilityContent}>
-              <Text style={styles.capabilityTitle}>Homework Helper</Text>
-              <Text style={styles.capabilityText}>Ask doubts from your school homework — Cloop explains step by step.</Text>
-            </View>
-          </View>
-          <View style={styles.capabilityItem}>
-            <View style={styles.capabilityIcon}>
-              <Ionicons name="document-text" size={20} color="#EAB308" />
-            </View>
-            <View style={styles.capabilityContent}>
-              <Text style={styles.capabilityTitle}>Test Preparation Mode</Text>
-              <Text style={styles.capabilityText}>Generate chapter-wise mock tests and get feedback on every wrong answer.</Text>
-            </View>
-          </View>
-          <View style={styles.capabilityItem}>
-            <View style={styles.capabilityIcon}>
-              <Ionicons name="create" size={20} color="#EA580C" />
-            </View>
-            <View style={styles.capabilityContent}>
-              <Text style={styles.capabilityTitle}>Error Correction</Text>
-              <Text style={styles.capabilityText}>Learn from mistakes through real-time grammar, logic, and concept correction.</Text>
-            </View>
-          </View>
-          <View style={styles.capabilityItem}>
-            <View style={styles.capabilityIcon}>
-              <Ionicons name="calendar" size={20} color="#059669" />
-            </View>
-            <View style={styles.capabilityContent}>
-              <Text style={styles.capabilityTitle}>Smart Revision Planner</Text>
-              <Text style={styles.capabilityText}>AI creates a 10-min daily plan based on what you forget most.</Text>
-            </View>
-          </View>
-          <View style={styles.capabilityItem}>
-            <View style={styles.capabilityIcon}>
-              <Ionicons name="flag" size={20} color="#10B981" />
-            </View>
-            <View style={styles.capabilityContent}>
-              <Text style={styles.capabilityTitle}>Goal Tracker 🏅</Text>
-              <Text style={styles.capabilityText}>Sets weekly learning goals — and rewards you when you achieve them!</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Comparison */}
-        <View style={[styles.comparisonSection, showStyle(3)]}>
-          <Text style={styles.sectionTitle}>🔬 Cloop vs Traditional Tuitions</Text>
-          <Text style={styles.comparisonSubtitle}>See why thousands are switching to AI-powered learning</Text>
-          <View style={styles.comparisonTable}>
-            <View style={styles.comparisonRow}>
-              <View style={styles.comparisonCell}><Text style={styles.comparisonHeader}></Text></View>
-              <View style={[styles.comparisonCell, styles.comparisonCloopHeader]}>
-                <Text style={styles.comparisonHeaderText}>Cloop (AI Tutor)</Text>
-              </View>
-              <View style={styles.comparisonCell}>
-                <Text style={styles.comparisonHeaderText}>Private Tuition</Text>
-              </View>
-            </View>
-            <View style={styles.comparisonRow}>
-              <View style={styles.comparisonCell}><Text style={styles.comparisonLabel}>Cost</Text></View>
-              <View style={[styles.comparisonCell, styles.comparisonCloopCell]}>
-                <Text style={styles.comparisonValue}>90% cheaper</Text>
-              </View>
-              <View style={styles.comparisonCell}>
-                <Text style={styles.comparisonValue}>Expensive monthly fees</Text>
-              </View>
-            </View>
-            <View style={[styles.comparisonRow, styles.comparisonRowAlt]}>
-              <View style={styles.comparisonCell}><Text style={styles.comparisonLabel}>Availability</Text></View>
-              <View style={[styles.comparisonCell, styles.comparisonCloopCell]}>
-                <Text style={styles.comparisonValue}>24×7</Text>
-              </View>
-              <View style={styles.comparisonCell}>
-                <Text style={styles.comparisonValue}>Fixed hours only</Text>
-              </View>
-            </View>
-            <View style={styles.comparisonRow}>
-              <View style={styles.comparisonCell}><Text style={styles.comparisonLabel}>Personalization</Text></View>
-              <View style={[styles.comparisonCell, styles.comparisonCloopCell]}>
-                <Text style={styles.comparisonValue}>Adapts to you</Text>
-              </View>
-              <View style={styles.comparisonCell}>
-                <Text style={styles.comparisonValue}>One-size-fits-all</Text>
-              </View>
-            </View>
-            <View style={[styles.comparisonRow, styles.comparisonRowAlt]}>
-              <View style={styles.comparisonCell}><Text style={styles.comparisonLabel}>Feedback Speed</Text></View>
-              <View style={[styles.comparisonCell, styles.comparisonCloopCell]}>
-                <Text style={styles.comparisonValue}>Instant correction</Text>
-              </View>
-              <View style={styles.comparisonCell}>
-                <Text style={styles.comparisonValue}>Delayed correction</Text>
-              </View>
-            </View>
-            <View style={styles.comparisonRow}>
-              <View style={styles.comparisonCell}><Text style={styles.comparisonLabel}>Learning Style</Text></View>
-              <View style={[styles.comparisonCell, styles.comparisonCloopCell]}>
-                <Text style={styles.comparisonValue}>Interactive chat-based</Text>
-              </View>
-              <View style={styles.comparisonCell}>
-                <Text style={styles.comparisonValue}>Lecture-based</Text>
-              </View>
-            </View>
-            <View style={[styles.comparisonRow, styles.comparisonRowAlt]}>
-              <View style={styles.comparisonCell}><Text style={styles.comparisonLabel}>Improvement</Text></View>
-              <View style={[styles.comparisonCell, styles.comparisonCloopCell]}>
-                <Text style={styles.comparisonValueBold}>+25% faster results</Text>
-              </View>
-              <View style={styles.comparisonCell}>
-                <Text style={styles.comparisonValue}>Depends on teacher</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Stats page removed per request */}
-
-        {/* CTA Section */}
-        <View style={[styles.ctaSection, showStyle(4)]}>
-          <Text style={styles.ctaTitle}>Start Your AI Learning Journey</Text>
-          <Text style={styles.ctaSubtitle}>
-            Join thousands of students who are already experiencing personalized, intelligent education
-          </Text>
-          {/* Condensed features replicated here so CTA also shows key benefits */}
-          <View style={styles.ctaFeaturesGrid}>
-            <View style={styles.ctaFeatureCard}>
-              <View style={styles.ctaFeatureIcon}>
-                <Ionicons name="trophy-outline" size={18} color="#F59E0B" />
-              </View>
-              <View style={styles.ctaFeatureContent}>
-                <Text style={styles.ctaFeatureTitle}>Improve Exam Performance</Text>
-                <Text style={styles.ctaFeatureText} numberOfLines={2} ellipsizeMode="tail">Adaptive practice and instant feedback to boost test scores quickly.</Text>
-              </View>
-            </View>
-
-            <View style={styles.ctaFeatureCard}>
-              <View style={styles.ctaFeatureIcon}>
-                <Ionicons name="time-outline" size={18} color="#10B981" />
-              </View>
-              <View style={styles.ctaFeatureContent}>
-                <Text style={styles.ctaFeatureTitle}>Save Study Time</Text>
-                <Text style={styles.ctaFeatureText} numberOfLines={2} ellipsizeMode="tail">Short, focused revision paths that cut study hours in half.</Text>
-              </View>
-            </View>
-
-            <View style={styles.ctaFeatureCard}>
-              <View style={styles.ctaFeatureIcon}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#EAB308" />
-              </View>
-              <View style={styles.ctaFeatureContent}>
-                <Text style={styles.ctaFeatureTitle}>Master Concepts</Text>
-                <Text style={styles.ctaFeatureText} numberOfLines={2} ellipsizeMode="tail">Real-time corrections so you understand, not just memorize.</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary]}
-              onPress={() => {
-                console.log('navigate to signup');
-                router.push({ pathname: '/login-sigup/sigup' });
-              }}
-            >
-              <Text style={styles.btnText}>Start Free</Text>
-              <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.btnIcon} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnSecondary]}
-              onPress={() => {
-                console.log('navigate to login');
-                router.push({ pathname: '/login-sigup/login' });
-              }}
-            >
-              <Text style={styles.btnTextSecondary}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Footer */}
-        <View style={[styles.footer, showStyle(4)]}>
-          <Text style={styles.footerText}>
-            Join 10,000+ students already learning faster with Cloop.
-          </Text>
-        </View>
-        </View>
-
+  const renderHeroContent = () => (
+    <View style={styles.slideContent}>
+      <View style={styles.heroHeader}>
+        <Image source={LOGO_IMG} style={styles.logo} resizeMode="contain" />
+        <Text style={styles.heroBrand}>Cloop</Text>
+        <Text style={styles.heroSubtitle}>Study Less. Score More.</Text>
       </View>
 
-      {/* Bottom navigation: Prev arrow, pagination dots, Next arrow */}
-      <View style={styles.paginationContainer}>
-        <TouchableOpacity
-          style={[styles.arrowButton, currentIndex === 0 && styles.arrowDisabled]}
-          onPress={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
-          disabled={currentIndex === 0}
-        >
-          <Ionicons name="chevron-back" size={20} color={currentIndex === 0 ? '#94A3B8' : '#111827'} />
-        </TouchableOpacity>
+      <View style={styles.heroImageContainer}>
+        <Image source={HERO_IMG} style={styles.heroImage} resizeMode="contain" />
+      </View>
 
-        <View style={styles.dotsWrapper}>
-          {sections.map((s, i) => (
-            <View key={s} style={[styles.dot, currentIndex === i && styles.dotActive]} />
-          ))}
+      <View style={styles.infoCard}>
+        <Text style={styles.infoText}>
+          India's first AI-powered learning tutor that helps you finish homework faster and
+          <Text style={styles.highlightText}> improve marks by 25%</Text>.
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderFeaturesContent = () => (
+    <View style={styles.slideContent}>
+      <View style={styles.featureCard}>
+        <Image source={TROPHY_IMG} style={styles.featureImage} resizeMode="contain" />
+        <Text style={styles.cardTitle}>Gamified Learning</Text>
+        <Text style={styles.cardText}>
+          Earn rewards and badges as you learn. Adaptive practice helps you score higher with up to
+          <Text style={{ fontWeight: '700', color: THEME.colors.primary }}> 25% improvement</Text> in 3 weeks.
+        </Text>
+      </View>
+
+      <View style={styles.featureCard}>
+        <View style={[styles.iconBox, { backgroundColor: '#ECFDF5' }]}>
+          <Ionicons name="time" size={32} color="#10B981" />
+        </View>
+        <Text style={styles.cardTitle}>Save 50% Study Time</Text>
+        <Text style={styles.cardText}>
+          Stop wasting time on what you already know. AI tracks weak spots and creates focused revision paths just for you.
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderCapabilitiesContent = () => (
+    <View style={styles.slideContent}>
+      <View style={styles.listContainer}>
+        {[
+          { icon: 'chatbubbles', color: '#F59E0B', title: 'AI Tutor', text: 'Instant answers to all your doubts, 24/7.' },
+          { icon: 'school', color: '#EF4444', title: 'Homework Helper', text: 'Step-by-step explanations, not just answers.' },
+          { icon: 'document-text', color: '#EAB308', title: 'Test Prep', text: 'Unlimited mock tests with instant feedback.' },
+          { icon: 'pencil', color: '#EA580C', title: 'Writing Coach', text: 'Real-time grammar and logic correction.' },
+        ].map((item, index) => (
+          <View key={index} style={styles.listItem}>
+            <View style={[styles.listIcon, { backgroundColor: item.color + '15' }]}>
+              <Ionicons name={item.icon as any} size={24} color={item.color} />
+            </View>
+            <View style={styles.listTextContainer}>
+              <Text style={styles.listTitle}>{item.title}</Text>
+              <Text style={styles.listDesc}>{item.text}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderComparisonContent = () => (
+    <View style={styles.slideContent}>
+      <View style={styles.comparisonCard}>
+        <View style={styles.comparisonHeader}>
+          <View style={{ flex: 1 }}></View>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.colHeader}>Cloop</Text>
+          </View>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={[styles.colHeader, { color: '#6B7280' }]}>Others</Text>
+          </View>
         </View>
 
+        {[
+          { label: '24/7 Availability', cloop: true, other: false },
+          { label: 'Personalized Plan', cloop: true, other: false },
+          { label: 'Instant Doubts', cloop: true, other: false },
+          { label: 'Cost Effective', cloop: true, other: false },
+        ].map((row, i) => (
+          <View key={i} style={[styles.comparisonRow, i === 3 && { borderBottomWidth: 0 }]}>
+            <Text style={styles.rowLabel}>{row.label}</Text>
+            <View style={styles.iconCol}>
+              <Ionicons name="checkmark-circle" size={24} color={THEME.colors.primary} />
+            </View>
+            <View style={styles.iconCol}>
+              <Ionicons name="close-circle" size={24} color="#E5E7EB" />
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.infoCard}>
+        <Text style={styles.infoText}>
+          Why settle for less? Upgrade to the <Text style={styles.highlightText}>future of learning</Text>.
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderCTAContent = () => (
+    <View style={styles.slideContent}>
+      <View style={styles.ctaCard}>
+        <Image source={LOGO_IMG} style={styles.ctaLogo} resizeMode="contain" />
+        <Text style={styles.ctaMainTitle}>Start Your Journey</Text>
+        <Text style={styles.ctaMainSubtitle}>
+          Join 10,000+ students learning faster with Cloop.
+        </Text>
+
         <TouchableOpacity
-          style={[styles.arrowButton, currentIndex === sections.length - 1 && styles.arrowDisabled]}
-          onPress={() => setCurrentIndex(Math.min(sections.length - 1, currentIndex + 1))}
-          disabled={currentIndex === sections.length - 1}
+          style={styles.primaryButton}
+          onPress={() => router.push('/login-sigup/sigup')}
         >
-          <Ionicons name="chevron-forward" size={20} color={currentIndex === sections.length - 1 ? '#94A3B8' : '#111827'} />
+          <Text style={styles.primaryButtonText}>Start Free</Text>
+          <Ionicons name="arrow-forward" size={20} color="#FFF" style={{ marginLeft: 8 }} />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => router.push('/login-sigup/login')}
+        >
+          <Text style={styles.secondaryButtonText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+
+      <View style={styles.header}>
+        {currentIndex > 0 && slides[currentIndex].title ? (
+          <Text style={styles.headerTitle}>{slides[currentIndex].title}</Text>
+        ) : null}
+      </View>
+
+      <Animated.ScrollView
+        ref={slidesRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={handleScroll}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {slides.map((slide) => (
+          <View key={slide.id} style={styles.slide}>
+            {slide.id === 'hero' && renderHeroContent()}
+            {slide.id === 'features' && renderFeaturesContent()}
+            {slide.id === 'capabilities' && renderCapabilitiesContent()}
+            {slide.id === 'comparison' && renderComparisonContent()}
+            {slide.id === 'cta' && renderCTAContent()}
+          </View>
+        ))}
+      </Animated.ScrollView>
+
+      <View style={styles.bottomContainer}>
+        <View style={styles.pagination}>
+          {slides.map((_, i) => {
+            const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
+            const dotWidth = scrollX.interpolate({
+              inputRange,
+              outputRange: [8, 24, 8],
+              extrapolate: 'clamp',
+            });
+            const opacity = scrollX.interpolate({
+              inputRange,
+              outputRange: [0.3, 1, 0.3],
+              extrapolate: 'clamp',
+            });
+            return (
+              <Animated.View
+                key={i}
+                style={[styles.dot, { width: dotWidth, opacity, backgroundColor: THEME.colors.primary }]}
+              />
+            );
+          })}
+        </View>
+
+        <View style={styles.navButtons}>
+          <TouchableOpacity
+            style={[styles.navBtn, currentIndex === 0 && styles.navBtnHidden]}
+            onPress={() => scrollTo(currentIndex - 1)}
+            disabled={currentIndex === 0}
+          >
+            <Ionicons name="arrow-back" size={24} color={THEME.colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navBtn, styles.navBtnPrimary, currentIndex === slides.length - 1 && styles.navBtnHidden]}
+            onPress={() => scrollTo(currentIndex + 1)}
+            disabled={currentIndex === slides.length - 1}
+          >
+            <Ionicons name="arrow-forward" size={24} color="#FFF" />
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -383,512 +285,326 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: THEME.colors.background,
   },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    backgroundColor: THEME.colors.background,
   },
-  loadingText: {
-    color: '#6B7280',
-    fontSize: 16,
-    marginTop: 12,
+  loadingLogo: {
+    width: 120,
+    height: 120,
+  },
+  header: {
+    height: 50, // Reduced height
+    justifyContent: 'flex-end', // Align bottom to be closer to content
+    alignItems: 'center',
+    paddingHorizontal: THEME.spacing.l,
+    paddingBottom: 3, // Reduced padding
+  },
+  headerTitle: {
+    ...THEME.typography.h3,
+    fontSize: 22, // Slightly larger
+    fontWeight: '700', // Bold
+    color: THEME.colors.text.primary,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 0,
-  },
-  
-  // Upper Half Section
-  upperHalf: {
-    backgroundColor: '#FEF3C7',
-    paddingBottom: 40,
-  },
-  
-  // Lower Half Section
-  lowerHalf: {
-    backgroundColor: '#D1FAE5',
-    paddingTop: 20,
-    minHeight: 520,
-    overflow: 'hidden',
-  },
-  
-  // Hero Section
-  heroSection: {
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 40,
-    minHeight: 480,
-    justifyContent: 'center',
+  },
+  slide: {
+    width: width,
+    paddingHorizontal: THEME.spacing.l,
+    paddingTop: 0, // Remove top padding to bring content closer to header
+    paddingBottom: 100, // Space for bottom container
+    alignItems: 'center',
+  },
+  slideContent: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 0, // Remove top padding from content
+  },
+
+  // Hero
+  heroHeader: {
+    alignItems: 'center',
+    marginBottom: THEME.spacing.m,
   },
   logo: {
     width: 80,
     height: 80,
-    borderRadius: 20,
-    backgroundColor: '#F59E0B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    marginBottom: THEME.spacing.s,
   },
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '900',
-  },
-  brand: {
+  heroBrand: {
     fontSize: 36,
     fontWeight: '900',
-    color: '#111827',
-    marginBottom: 8,
+    color: THEME.colors.text.primary,
+    marginBottom: 4,
   },
   heroSubtitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#059669',
-    marginBottom: 24,
+    color: THEME.colors.primary,
   },
-  heroDescription: {
+  heroImageContainer: {
+    width: '100%',
+    height: 300,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    maxWidth: 560,
+    marginBottom: THEME.spacing.l,
   },
-  heroText: {
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  infoCard: {
+    backgroundColor: '#FFFFFF',
+    padding: THEME.spacing.l,
+    borderRadius: THEME.sizes.radius.xl,
+    width: '100%',
+    ...THEME.shadows.medium,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  infoText: {
+    ...THEME.typography.body,
+    textAlign: 'center',
+    color: THEME.colors.text.primary,
     fontSize: 16,
     lineHeight: 24,
-    color: '#4B5563',
-    textAlign: 'center',
   },
   highlightText: {
     fontWeight: '700',
-    color: '#F59E0B',
+    color: THEME.colors.secondary,
   },
-  
-  // Quick Features Section
-  quickFeaturesSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 0,
-    marginHorizontal: 0,
-    paddingTop: 0,
-    overflow: 'hidden',
-  },
-  quickFeatureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#FCD34D',
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    width: '100%'
-  },
-  quickFeatureIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  quickFeatureText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-    flex: 1,
-    lineHeight: 20,
-  },
-  
-  // Features Section
-  featuresSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 40,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  featuresGrid: {
-    gap: 12,
-    paddingHorizontal: 8,
-  },
+
+  // Features
   featureCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#A7F3D0',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    padding: THEME.spacing.l, // Reduced padding
+    borderRadius: THEME.sizes.radius.xl,
+    marginBottom: THEME.spacing.m, // Reduced margin
     width: '100%',
-    alignSelf: 'stretch',
-    overflow: 'hidden',
-    marginBottom: 10,
+    alignItems: 'center',
+    ...THEME.shadows.medium,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
-  featureIcon: {
+  featureImage: {
+    width: 100, // Reduced size
+    height: 100, // Reduced size
+    marginBottom: THEME.spacing.s, // Reduced margin
+  },
+  iconBox: {
+    width: 70, // Reduced size
+    height: 70, // Reduced size
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: THEME.spacing.s, // Reduced margin
+  },
+  cardTitle: {
+    ...THEME.typography.h3,
+    fontSize: 20, // Slightly smaller
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  cardText: {
+    ...THEME.typography.body,
+    textAlign: 'center',
+    color: THEME.colors.text.secondary,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+
+  // Capabilities List (New Layout)
+  listContainer: {
+    width: '100%',
+    gap: THEME.spacing.m,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: THEME.spacing.m,
+    borderRadius: THEME.sizes.radius.l,
+    ...THEME.shadows.small,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  listIcon: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    marginRight: THEME.spacing.m,
   },
-  featureTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 6,
-  },
-  featureDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#6B7280',
-  },
-  
-  // Capabilities Section
-  capabilitiesSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 40,
-  },
-  capabilityItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#FDE68A',
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  capabilityIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  capabilityContent: {
+  listTextContainer: {
     flex: 1,
   },
-  capabilityTitle: {
-    fontSize: 15,
+  listTitle: {
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
+    fontSize: 16,
+    color: THEME.colors.text.primary,
+    marginBottom: 2,
   },
-  capabilityText: {
+  listDesc: {
     fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 20,
+    color: THEME.colors.text.secondary,
+    lineHeight: 18,
   },
-  
-  // Comparison Section
-  comparisonSection: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 40,
-  },
-  comparisonSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  comparisonTable: {
+
+  // Comparison
+  comparisonCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#A7F3D0',
+    padding: THEME.spacing.l,
+    borderRadius: THEME.sizes.radius.xl,
+    width: '100%',
+    ...THEME.shadows.medium,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    marginBottom: THEME.spacing.l,
+  },
+  comparisonHeader: {
+    flexDirection: 'row',
+    marginBottom: THEME.spacing.m,
+    paddingBottom: THEME.spacing.s,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  colHeader: {
+    fontWeight: '700',
+    fontSize: 16,
+    color: THEME.colors.primary,
   },
   comparisonRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  comparisonRowAlt: {
-    backgroundColor: '#F9FAFB',
-  },
-  comparisonCell: {
-    flex: 1,
-    padding: 14,
-    justifyContent: 'center',
-  },
-  comparisonCloopHeader: {
-    backgroundColor: '#FEF3C7',
-  },
-  comparisonCloopCell: {
-    backgroundColor: '#D1FAE5',
-  },
-  comparisonHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    textAlign: 'left',
-  },
-  comparisonHeaderText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'left',
-  },
-  comparisonLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    textAlign: 'left',
-  },
-  comparisonValue: {
-    fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'left',
-  },
-  comparisonValueBold: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#10B981',
-    textAlign: 'left',
-  },
-  
-  // Stats Section
-  statsSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    borderRadius: 20,
-    marginBottom: 40,
-    borderWidth: 2,
-    borderColor: '#10B981',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#059669',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  
-  // CTA Section
-  ctaSection: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 40,
-  },
-  ctaTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  ctaSubtitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 12,
-  },
-  
-  // Buttons
-  actions: {
-    width: '100%',
-    gap: 12,
-  },
-  btn: {
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  btnPrimary: {
-    backgroundColor: '#059669',
-  },
-  btnSecondary: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#F59E0B',
-  },
-  btnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  btnIcon: {
-    marginLeft: 8,
-  },
-  btnTextSecondary: {
-    color: '#D97706',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  
-  // Footer
-  footer: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  pagerContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  pagerContainerNoPadding: {
-    paddingHorizontal: 0,
-  },
-  containerHero: {
-    backgroundColor: '#FEF3C7',
-  },
-  containerFeatures: {
-    backgroundColor: '#D1FAE5',
-  },
-  pagerContent: {
-    flex: 1,
-  },
-  arrowButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 4,
-    // placed inside bottom nav now
-    marginHorizontal: 8,
-  },
-  arrowDisabled: {
-    backgroundColor: '#F8FAFC',
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  dotsWrapper: {
+  rowLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: THEME.colors.text.primary,
+  },
+  iconCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  // CTA
+  ctaCard: {
+    backgroundColor: '#FFFFFF',
+    padding: THEME.spacing.xl,
+    borderRadius: THEME.sizes.radius.xl,
+    width: '100%',
+    alignItems: 'center',
+    ...THEME.shadows.large,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    marginTop: THEME.spacing.l,
+  },
+  ctaLogo: {
+    width: 100,
+    height: 100,
+    marginBottom: THEME.spacing.m,
+  },
+  ctaMainTitle: {
+    ...THEME.typography.h2,
+    fontSize: 28,
+    marginBottom: THEME.spacing.s,
+    textAlign: 'center',
+  },
+  ctaMainSubtitle: {
+    ...THEME.typography.body,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: THEME.spacing.xl,
+    color: THEME.colors.text.secondary,
+  },
+  primaryButton: {
+    backgroundColor: THEME.colors.primary,
+    width: '100%',
+    height: 60,
+    borderRadius: THEME.sizes.radius.l,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: THEME.spacing.m,
+    ...THEME.shadows.medium,
+  },
+  primaryButtonText: {
+    ...THEME.typography.button,
+    fontSize: 20,
+  },
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    height: 60,
+    borderRadius: THEME.sizes.radius.l,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: THEME.colors.secondary,
+  },
+  secondaryButtonText: {
+    ...THEME.typography.button,
+    color: THEME.colors.secondary,
+    fontSize: 20,
+  },
+
+  // Bottom Container
+  bottomContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: THEME.spacing.l,
+    paddingBottom: Platform.OS === 'android' ? 24 : 0, // Add padding for Android nav bar
+    height: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: THEME.colors.background,
+    // Add gradient or blur if needed, but solid background is safer for overlap issues
+  },
+  pagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   dot: {
-    width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: 4,
   },
-  dotActive: {
-    backgroundColor: '#059669',
-    width: 12,
-    height: 12,
-  },
-  hidden: {
-    display: 'none',
-  },
-  // CTA condensed feature styles
-  ctaFeaturesGrid: {
-    width: '100%',
-    marginTop: 16,
-    marginBottom: 8,
-    paddingHorizontal: 8,
-  },
-  ctaFeatureCard: {
+  navButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#E6F9F0',
-    marginBottom: 8,
+    gap: THEME.spacing.m,
   },
-  ctaFeatureIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#F3F4F6',
+  navBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    ...THEME.shadows.small,
   },
-  ctaFeatureContent: {
-    flex: 1,
+  navBtnPrimary: {
+    backgroundColor: THEME.colors.primary,
+    borderColor: THEME.colors.primary,
   },
-  ctaFeatureTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  ctaFeatureText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
+  navBtnHidden: {
+    opacity: 0,
   },
 });

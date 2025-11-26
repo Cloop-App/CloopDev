@@ -1,8 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Pressable, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserMetrics } from '../../src/client/profile/useProgress';
+import { THEME } from '../../src/constants/theme';
+
+const LOGO_IMG = require('../../assets/images/logo.png');
 
 export default function MetricsScreen() {
   const router = useRouter();
@@ -11,6 +14,7 @@ export default function MetricsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <Text style={styles.loadingText}>Loading your metrics...</Text>
         </View>
@@ -21,6 +25,7 @@ export default function MetricsScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <Text style={styles.errorText}>Error: {error}</Text>
           <Pressable style={styles.retryButton} onPress={refetch}>
@@ -34,6 +39,7 @@ export default function MetricsScreen() {
   if (!metrics) {
     return (
       <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
           <Text style={styles.noDataText}>No metrics data available</Text>
         </View>
@@ -43,14 +49,17 @@ export default function MetricsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Learning Metrics</Text>
+        <View style={styles.headerTitleContainer}>
+          <Image source={LOGO_IMG} style={styles.headerLogo} resizeMode="contain" />
+          <Text style={styles.headerTitle}>Learning Metrics</Text>
+        </View>
         <View style={styles.headerRight} />
       </View>
 
@@ -60,25 +69,33 @@ export default function MetricsScreen() {
           <Text style={styles.sectionTitle}>Overview</Text>
           <View style={styles.overviewGrid}>
             <View style={styles.overviewCard}>
-              <Ionicons name="school-outline" size={24} color="#2563eb" />
+              <View style={[styles.iconContainer, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="school-outline" size={24} color={THEME.colors.primary} />
+              </View>
               <Text style={styles.overviewNumber}>{metrics.overview.completed_subjects}</Text>
               <Text style={styles.overviewLabel}>Completed Subjects</Text>
               <Text style={styles.overviewSubtext}>of {metrics.overview.total_subjects} total</Text>
             </View>
             <View style={styles.overviewCard}>
-              <Ionicons name="book-outline" size={24} color="#10b981" />
+              <View style={[styles.iconContainer, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="book-outline" size={24} color={THEME.colors.success} />
+              </View>
               <Text style={styles.overviewNumber}>{metrics.overview.completed_chapters}</Text>
               <Text style={styles.overviewLabel}>Completed Chapters</Text>
               <Text style={styles.overviewSubtext}>of {metrics.overview.total_chapters} total</Text>
             </View>
             <View style={styles.overviewCard}>
-              <Ionicons name="checkbox-outline" size={24} color="#f59e0b" />
+              <View style={[styles.iconContainer, { backgroundColor: '#FFFBEB' }]}>
+                <Ionicons name="checkbox-outline" size={24} color={THEME.colors.secondary} />
+              </View>
               <Text style={styles.overviewNumber}>{metrics.overview.total_topics_completed}</Text>
               <Text style={styles.overviewLabel}>Topics Mastered</Text>
               <Text style={styles.overviewSubtext}>across all subjects</Text>
             </View>
             <View style={styles.overviewCard}>
-              <Ionicons name="trending-up-outline" size={24} color="#8b5cf6" />
+              <View style={[styles.iconContainer, { backgroundColor: '#F5F3FF' }]}>
+                <Ionicons name="trending-up-outline" size={24} color="#8b5cf6" />
+              </View>
               <Text style={styles.overviewNumber}>{metrics.overview.overall_progress}%</Text>
               <Text style={styles.overviewLabel}>Overall Progress</Text>
               <Text style={styles.overviewSubtext}>learning journey</Text>
@@ -97,11 +114,11 @@ export default function MetricsScreen() {
                   <Text style={styles.subjectPercent}>{subject.completion_percent}%</Text>
                 </View>
                 <View style={styles.progressBar}>
-                  <View 
+                  <View
                     style={[
-                      styles.progressFill, 
+                      styles.progressFill,
                       { width: `${subject.completion_percent}%` }
-                    ]} 
+                    ]}
                   />
                 </View>
                 <View style={styles.subjectStats}>
@@ -125,7 +142,7 @@ export default function MetricsScreen() {
               {metrics.strong_topics.map((topic, index) => (
                 <View key={index} style={[styles.topicCard, styles.strongTopicCard]}>
                   <View style={styles.topicIcon}>
-                    <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                    <Ionicons name="checkmark-circle" size={20} color={THEME.colors.success} />
                   </View>
                   <View style={styles.topicInfo}>
                     <Text style={styles.topicTitle}>{topic.title}</Text>
@@ -146,7 +163,7 @@ export default function MetricsScreen() {
               {metrics.weak_topics.map((topic, index) => (
                 <View key={index} style={[styles.topicCard, styles.weakTopicCard]}>
                   <View style={styles.topicIcon}>
-                    <Ionicons name="alert-circle" size={20} color="#f59e0b" />
+                    <Ionicons name="alert-circle" size={20} color={THEME.colors.secondary} />
                   </View>
                   <View style={styles.topicInfo}>
                     <Text style={styles.topicTitle}>{topic.title}</Text>
@@ -164,15 +181,17 @@ export default function MetricsScreen() {
           <Text style={styles.sectionTitle}>Activity Summary</Text>
           <View style={styles.activityCard}>
             <View style={styles.activityItem}>
-              <Ionicons name="chatbubbles-outline" size={24} color="#2563eb" />
+              <View style={[styles.iconContainer, { backgroundColor: '#EFF6FF' }]}>
+                <Ionicons name="chatbubbles-outline" size={24} color={THEME.colors.primary} />
+              </View>
               <View style={styles.activityInfo}>
                 <Text style={styles.activityNumber}>{metrics.activity.total_chat_sessions}</Text>
                 <Text style={styles.activityLabel}>Total Chat Sessions</Text>
               </View>
             </View>
-            
+
             <View style={styles.activityDivider} />
-            
+
             <View style={styles.mostActiveSection}>
               <Text style={styles.mostActiveTitle}>Most Active Topics</Text>
               {metrics.activity.most_active_topics.slice(0, 3).map((topic, index) => (
@@ -192,7 +211,7 @@ export default function MetricsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: THEME.colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -200,17 +219,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 15,
+    backgroundColor: THEME.colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: THEME.colors.border,
   },
   backButton: {
     padding: 5,
   },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerLogo: {
+    width: 28,
+    height: 28,
+    marginRight: 8,
+  },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: THEME.colors.text.primary,
   },
   headerRight: {
     width: 34,
@@ -224,8 +253,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: THEME.colors.text.primary,
     marginBottom: 15,
   },
   overviewGrid: {
@@ -236,31 +265,37 @@ const styles = StyleSheet.create({
   overviewCard: {
     backgroundColor: '#fff',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     width: '47%',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...THEME.shadows.small,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   overviewNumber: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#333',
-    marginTop: 8,
+    fontWeight: '800',
+    color: THEME.colors.text.primary,
+    marginTop: 4,
   },
   overviewLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
+    fontWeight: '600',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     marginTop: 4,
   },
   overviewSubtext: {
     fontSize: 10,
-    color: '#999',
+    color: THEME.colors.text.light,
     textAlign: 'center',
     marginTop: 2,
   },
@@ -270,12 +305,10 @@ const styles = StyleSheet.create({
   subjectProgressCard: {
     backgroundColor: '#fff',
     padding: 16,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 16,
+    ...THEME.shadows.small,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   subjectProgressHeader: {
     flexDirection: 'row',
@@ -285,23 +318,24 @@ const styles = StyleSheet.create({
   },
   subjectName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: THEME.colors.text.primary,
   },
   subjectPercent: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#2563eb',
+    fontWeight: '700',
+    color: THEME.colors.primary,
   },
   progressBar: {
     height: 8,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#F3F4F6',
     borderRadius: 4,
     marginBottom: 10,
+    overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.colors.primary,
     borderRadius: 4,
   },
   subjectStats: {
@@ -310,7 +344,8 @@ const styles = StyleSheet.create({
   },
   subjectStat: {
     fontSize: 12,
-    color: '#666',
+    color: THEME.colors.text.secondary,
+    fontWeight: '500',
   },
   topicsContainer: {
     gap: 10,
@@ -318,22 +353,20 @@ const styles = StyleSheet.create({
   topicCard: {
     backgroundColor: '#fff',
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    ...THEME.shadows.small,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   strongTopicCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#10b981',
+    borderLeftColor: THEME.colors.success,
   },
   weakTopicCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: THEME.colors.secondary,
   },
   topicIcon: {
     marginRight: 12,
@@ -344,34 +377,32 @@ const styles = StyleSheet.create({
   topicTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: THEME.colors.text.primary,
   },
   topicSubject: {
     fontSize: 12,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     marginTop: 2,
   },
   topicCompletion: {
     fontSize: 11,
-    color: '#10b981',
-    fontWeight: '500',
+    color: THEME.colors.success,
+    fontWeight: '600',
     marginTop: 2,
   },
   topicActivity: {
     fontSize: 11,
-    color: '#f59e0b',
-    fontWeight: '500',
+    color: THEME.colors.secondary,
+    fontWeight: '600',
     marginTop: 2,
   },
   activityCard: {
     backgroundColor: '#fff',
     padding: 20,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 16,
+    ...THEME.shadows.small,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
   activityItem: {
     flexDirection: 'row',
@@ -382,18 +413,19 @@ const styles = StyleSheet.create({
     marginLeft: 15,
   },
   activityNumber: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
+    fontSize: 24,
+    fontWeight: '800',
+    color: THEME.colors.text.primary,
   },
   activityLabel: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 13,
+    color: THEME.colors.text.secondary,
     marginTop: 2,
+    fontWeight: '500',
   },
   activityDivider: {
     height: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: THEME.colors.border,
     marginVertical: 15,
   },
   mostActiveSection: {
@@ -401,38 +433,45 @@ const styles = StyleSheet.create({
   },
   mostActiveTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 10,
+    fontWeight: '700',
+    color: THEME.colors.text.primary,
+    marginBottom: 12,
   },
   mostActiveItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   mostActiveTopicName: {
     fontSize: 13,
-    color: '#333',
+    color: THEME.colors.text.primary,
     flex: 1,
+    fontWeight: '500',
   },
   mostActiveTopicCount: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    color: THEME.colors.text.secondary,
+    fontWeight: '600',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   loadingText: {
     fontSize: 16,
-    color: '#666',
+    color: THEME.colors.text.secondary,
   },
   errorText: {
     fontSize: 16,
-    color: '#ef4444',
+    color: THEME.colors.error,
     textAlign: 'center',
     marginBottom: 15,
   },
   retryButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -443,7 +482,7 @@ const styles = StyleSheet.create({
   },
   noDataText: {
     fontSize: 16,
-    color: '#666',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
   },
 });

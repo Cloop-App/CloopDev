@@ -1,19 +1,22 @@
+
 import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Pressable, 
-  ScrollView, 
-  SafeAreaView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  SafeAreaView,
   StatusBar,
   ActivityIndicator,
-  Alert
+  Alert,
+  Platform
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { fetchChapters, Chapter, Subject } from '../../src/client/chapters/chapters';
+import { THEME } from '../../src/constants/theme';
 
 export default function ChapterScreen() {
   const router = useRouter();
@@ -21,77 +24,108 @@ export default function ChapterScreen() {
     subjectId: string;
     subjectName: string;
   }>();
-  const { user, token } = useAuth();
-  
+  const { user, token, isLoading: authLoading } = useAuth();
+
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [subject, setSubject] = useState<Subject | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (subjectId && user && token) {
-      loadChapters();
+    console.log('[ChapterScreen] useEffect triggered', { subjectId, authLoading, hasUser: !!user, hasToken: !!token });
+
+    // Wait for auth initialization
+    if (authLoading) {
+      console.log('[ChapterScreen] Waiting for auth loading...');
+      return;
     }
-  }, [subjectId, user, token]);
+
+    if (!subjectId) {
+      console.error('[ChapterScreen] Missing subjectId');
+      setError('Invalid subject parameters');
+      setLoading(false);
+      return;
+    }
+
+    if (!user || !token) {
+      console.error('[ChapterScreen] Missing user or token', { user: !!user, token: !!token });
+      setError('Authentication required');
+      setLoading(false);
+      return;
+    }
+
+    console.log('[ChapterScreen] All checks passed, calling loadChapters');
+    loadChapters();
+  }, [subjectId, user, token, authLoading]);
 
   const loadChapters = async () => {
+    console.log('[ChapterScreen] loadChapters started');
     try {
       setLoading(true);
       setError(null);
-      
+
+      console.log('[ChapterScreen] Calling fetchChapters API');
       const response = await fetchChapters(parseInt(subjectId!), {
         userId: user?.user_id,
         token: token || undefined
       });
-      
+      console.log('[ChapterScreen] fetchChapters success', response);
+
       setChapters(response.chapters);
       setSubject(response.subject);
     } catch (err) {
+      console.error('[ChapterScreen] fetchChapters error', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load chapters';
       setError(errorMessage);
-      console.error('Error loading chapters:', err);
     } finally {
+      console.log('[ChapterScreen] loadChapters finished, setting loading to false');
       setLoading(false);
     }
   };
 
   const handleChapterPress = (chapter: Chapter) => {
-    router.push(`/chapter-topic/topic?chapterId=${chapter.id}&chapterTitle=${encodeURIComponent(chapter.title)}&subjectName=${encodeURIComponent(subjectName || '')}` as any);
+    router.push({
+      pathname: '/chapter-topic/topic',
+      params: {
+        chapterId: chapter.id,
+        chapterTitle: chapter.title,
+        subjectId,
+        subjectName
+      }
+    });
   };
 
-
-
-  const getCompletionColor = (percentage: number) => {
-    if (percentage >= 80) return '#10B981'; // Green
-    if (percentage >= 50) return '#F59E0B'; // Yellow
-    return '#EF4444'; // Red
+  const getCompletionColor = (percent: number) => {
+    if (percent >= 100) return '#10B981';
+    if (percent >= 50) return '#F59E0B';
+    return THEME.colors.primary;
   };
 
   const renderChapterCard = (chapter: Chapter, index: number) => (
-    <Pressable 
-      key={chapter.id} 
+    <Pressable
+      key={chapter.id}
       style={styles.chapterCard}
       onPress={() => handleChapterPress(chapter)}
     >
       <View style={styles.chapterHeader}>
         <View style={styles.chapterIconContainer}>
-          <Ionicons 
-            name="book-outline" 
-            size={24} 
-            color="#2563eb" 
+          <Ionicons
+            name="book-outline"
+            size={24}
+            color={THEME.colors.primary}
           />
         </View>
         <View style={styles.chapterInfo}>
           <Text style={styles.chapterTitle}>{chapter.title}</Text>
           <Text style={styles.chapterNumber}>Chapter {index + 1}</Text>
         </View>
-        <Ionicons 
-          name="chevron-forward" 
-          size={20} 
-          color="#9CA3AF" 
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={THEME.colors.text.secondary}
         />
       </View>
-      
+
       <View style={styles.progressSection}>
         <View style={styles.progressInfo}>
           <Text style={styles.progressText}>
@@ -104,23 +138,23 @@ export default function ChapterScreen() {
             {chapter.completion_percent}% Complete
           </Text>
         </View>
-        
+
         <View style={styles.progressBarContainer}>
-          <View 
+          <View
             style={[
               styles.progressBar,
-              { 
+              {
                 width: `${chapter.completion_percent}%`,
                 backgroundColor: getCompletionColor(Number(chapter.completion_percent))
               }
-            ]} 
+            ]}
           />
         </View>
       </View>
 
       <View style={styles.metricsRow}>
         <View style={styles.metric}>
-          <Ionicons name="library-outline" size={16} color="#6B7280" />
+          <Ionicons name="library-outline" size={16} color={THEME.colors.text.secondary} />
           <Text style={styles.metricText}>{chapter.total_topics} Topics</Text>
         </View>
         <View style={styles.metric}>
@@ -128,7 +162,7 @@ export default function ChapterScreen() {
           <Text style={styles.metricText}>{chapter.completed_topics} Done</Text>
         </View>
         <View style={styles.metric}>
-          <Ionicons name="time-outline" size={16} color="#6B7280" />
+          <Ionicons name="time-outline" size={16} color={THEME.colors.text.secondary} />
           <Text style={styles.metricText}>
             {new Date(chapter.created_at).toLocaleDateString()}
           </Text>
@@ -140,9 +174,9 @@ export default function ChapterScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={THEME.colors.primary} />
           <Text style={styles.loadingText}>Loading chapters...</Text>
         </View>
       </SafeAreaView>
@@ -152,9 +186,9 @@ export default function ChapterScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+          <Ionicons name="alert-circle-outline" size={48} color={THEME.colors.primary} />
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <Pressable style={styles.retryButton} onPress={loadChapters}>
@@ -167,15 +201,15 @@ export default function ChapterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+
       {/* Header */}
       <View style={styles.header}>
-        <Pressable 
+        <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{subject?.name || subjectName}</Text>
@@ -206,7 +240,7 @@ export default function ChapterScreen() {
       </View>
 
       {/* Chapters List */}
-      <ScrollView 
+      <ScrollView
         style={styles.chaptersContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -218,7 +252,7 @@ export default function ChapterScreen() {
             <View style={styles.emptyIconContainer}>
               <Ionicons name="library-outline" size={72} color="#D1D5DB" />
             </View>
-            
+
             <Text style={styles.emptyTitle}>No Chapters Available</Text>
             <Text style={styles.emptyMessage}>
               No chapters have been created for {subjectName || 'this subject'} yet.
@@ -226,8 +260,6 @@ export default function ChapterScreen() {
           </View>
         )}
       </ScrollView>
-
-
     </SafeAreaView>
   );
 }
@@ -235,7 +267,7 @@ export default function ChapterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: THEME.colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -246,7 +278,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   errorContainer: {
     flex: 1,
@@ -257,18 +289,18 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#EF4444',
+    color: THEME.colors.primary,
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -282,10 +314,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
+    paddingBottom: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: THEME.colors.border,
   },
   backButton: {
     marginRight: 16,
@@ -296,11 +329,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: THEME.colors.text.primary,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginTop: 2,
   },
   summaryCard: {
@@ -325,11 +358,11 @@ const styles = StyleSheet.create({
   summaryNumber: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#2563eb',
+    color: THEME.colors.primary,
   },
   summaryLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginTop: 4,
     textAlign: 'center',
   },
@@ -340,7 +373,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: THEME.colors.text.primary,
     marginBottom: 16,
   },
   chapterCard: {
@@ -363,7 +396,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FEF2F2', // Light red
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -374,12 +407,12 @@ const styles = StyleSheet.create({
   chapterTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: THEME.colors.text.primary,
     marginBottom: 2,
   },
   chapterNumber: {
     fontSize: 14,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   progressSection: {
     marginBottom: 12,
@@ -392,7 +425,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   completionPercentage: {
     fontSize: 14,
@@ -400,7 +433,7 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     height: 6,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#f3f4f6',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -419,7 +452,7 @@ const styles = StyleSheet.create({
   },
   metricText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginLeft: 4,
   },
   emptyState: {
@@ -439,13 +472,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: THEME.colors.text.primary,
     marginBottom: 12,
     textAlign: 'center',
   },
   emptyMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
   },

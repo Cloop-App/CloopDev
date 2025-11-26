@@ -5,6 +5,7 @@ import { fetchUserProfile, UserProfile } from '../../src/client/profile/fetch-pr
 import { useAuth } from '../../src/context/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
 import { fetchAllSubjects, addUserSubject, removeUserSubject, getAvailableSubjects, Subject, UserSubjectResponse } from '../../src/client/profile/subjects'
+import { THEME } from '../../src/constants/theme'
 
 export default function ProfileScreen() {
 	const router = useRouter()
@@ -20,7 +21,7 @@ export default function ProfileScreen() {
 	// Dedicated logout handler
 	const handleLogout = async () => {
 		console.log('🔓 Logout initiated...')
-		
+
 		try {
 			// Call the logout function from AuthContext
 			await logout()
@@ -32,7 +33,7 @@ export default function ProfileScreen() {
 
 		// Always navigate to login regardless of logout success/failure
 		console.log('🧭 Navigating to login screen...')
-		
+
 		try {
 			// Try different navigation methods for better reliability
 			router.replace('/login-sigup/login')
@@ -60,12 +61,12 @@ export default function ProfileScreen() {
 	}, [isAuthenticated, router, user])
 
 	useEffect(() => {
-		console.log('📊 Profile loading effect triggered:', { 
-			isAuthenticated, 
-			hasUser: !!user, 
-			hasToken: !!token 
+		console.log('📊 Profile loading effect triggered:', {
+			isAuthenticated,
+			hasUser: !!user,
+			hasToken: !!token
 		})
-		
+
 		if (!isAuthenticated || !user) {
 			console.log('⏭️ Skipping profile load - not authenticated or no user')
 			return
@@ -76,11 +77,11 @@ export default function ProfileScreen() {
 		setError(null)
 
 		console.log('🔄 Fetching user profile for:', user.email)
-		
+
 		// Use the authenticated user's ID and token
-		fetchUserProfile({ 
-			userId: user.user_id, 
-			token: token || undefined 
+		fetchUserProfile({
+			userId: user.user_id,
+			token: token || undefined
 		})
 			.then((p) => {
 				if (mounted) {
@@ -103,7 +104,7 @@ export default function ProfileScreen() {
 
 	const loadAvailableSubjects = async () => {
 		if (!profile?.user_subjects) return
-		
+
 		setLoadingSubjects(true)
 		try {
 			const available = await getAvailableSubjects(profile.user_subjects, {
@@ -125,14 +126,14 @@ export default function ProfileScreen() {
 				userId: user?.user_id,
 				token: token || undefined
 			})
-			
+
 			// Refresh profile to get updated subjects
-			const updatedProfile = await fetchUserProfile({ 
-				userId: user?.user_id, 
-				token: token || undefined 
+			const updatedProfile = await fetchUserProfile({
+				userId: user?.user_id,
+				token: token || undefined
 			})
 			setProfile(updatedProfile)
-			
+
 			// Close modal and refresh available subjects
 			setShowAddSubject(false)
 			Alert.alert('Success', 'Subject added successfully!')
@@ -150,8 +151,8 @@ export default function ProfileScreen() {
 			`Are you sure you want to remove ${subjectName} from your profile?`,
 			[
 				{ text: 'Cancel', style: 'cancel' },
-				{ 
-					text: 'Remove', 
+				{
+					text: 'Remove',
 					style: 'destructive',
 					onPress: async () => {
 						setActionLoading(subjectId)
@@ -160,14 +161,14 @@ export default function ProfileScreen() {
 								userId: user?.user_id,
 								token: token || undefined
 							})
-							
+
 							// Refresh profile to get updated subjects
-							const updatedProfile = await fetchUserProfile({ 
-								userId: user?.user_id, 
-								token: token || undefined 
+							const updatedProfile = await fetchUserProfile({
+								userId: user?.user_id,
+								token: token || undefined
 							})
 							setProfile(updatedProfile)
-							
+
 							Alert.alert('Success', 'Subject removed successfully!')
 						} catch (err) {
 							const errorMessage = err instanceof Error ? err.message : 'Failed to remove subject'
@@ -193,7 +194,7 @@ export default function ProfileScreen() {
 	if (loading) {
 		return (
 			<View style={[styles.container, styles.center]}>
-				<ActivityIndicator size="large" color="#2563eb" />
+				<ActivityIndicator size="large" color={THEME.colors.primary} />
 			</View>
 		)
 	}
@@ -214,22 +215,22 @@ export default function ProfileScreen() {
 		)
 	}
 
-		const avatarSource = profile.avatar_url
-			? { uri: profile.avatar_url }
-			: { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=10B981&color=fff&size=256` }
+	const avatarSource = profile.avatar_url
+		? { uri: profile.avatar_url }
+		: { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=EF4444&color=fff&size=256` }
 
 	return (
 		<View style={styles.container}>
 			{/* Header with back and logout buttons */}
 			<View style={styles.topHeader}>
-				<Pressable 
+				<Pressable
 					style={styles.headerButton}
 					onPress={() => router.back()}
 				>
-					<Ionicons name="arrow-back" size={24} color="#111827" />
+					<Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
 				</Pressable>
 				<Text style={styles.headerTitle}>Profile</Text>
-				<Pressable 
+				<Pressable
 					style={styles.logoutButton}
 					onPress={() => {
 						Alert.alert(
@@ -237,8 +238,8 @@ export default function ProfileScreen() {
 							'Are you sure you want to logout?',
 							[
 								{ text: 'Cancel', style: 'cancel' },
-								{ 
-									text: 'Logout', 
+								{
+									text: 'Logout',
 									style: 'destructive',
 									onPress: async () => {
 										try {
@@ -255,106 +256,106 @@ export default function ProfileScreen() {
 						)
 					}}
 				>
-					<Ionicons name="log-out-outline" size={24} color="#ef4444" />
+					<Ionicons name="log-out-outline" size={24} color={THEME.colors.primary} />
 				</Pressable>
 			</View>
 
 			<ScrollView style={styles.scrollContainer} contentContainerStyle={styles.content}>
 				<View style={styles.profileHeader}>
-				<Image source={avatarSource} style={styles.avatar} />
-				<View style={styles.headerText}>
-					<Text style={styles.name}>{profile.name}</Text>
-					<Text style={styles.email}>{profile.email}</Text>
+					<Image source={avatarSource} style={styles.avatar} />
+					<View style={styles.headerText}>
+						<Text style={styles.name}>{profile.name}</Text>
+						<Text style={styles.email}>{profile.email}</Text>
+					</View>
 				</View>
-			</View>
 
-			<View style={styles.cardRow}>
-				<View style={styles.statCard}>
-					<Text style={styles.statNumber}>{profile.num_chats ?? 0}</Text>
-					<Text style={styles.statLabel}>Chats</Text>
+				<View style={styles.cardRow}>
+					<View style={styles.statCard}>
+						<Text style={styles.statNumber}>{profile.num_chats ?? 0}</Text>
+						<Text style={styles.statLabel}>Chats</Text>
+					</View>
+					<View style={styles.statCard}>
+						<Text style={styles.statNumber}>{profile.num_lessons ?? 0}</Text>
+						<Text style={styles.statLabel}>Lessons</Text>
+					</View>
 				</View>
-				<View style={styles.statCard}>
-					<Text style={styles.statNumber}>{profile.num_lessons ?? 0}</Text>
-					<Text style={styles.statLabel}>Lessons</Text>
-				</View>
-			</View>
 
-			<View style={styles.section}>
-				<Text style={styles.sectionTitle}>About</Text>
-				<Text style={styles.sectionText}>Grade: {profile.grade_level || '—'}</Text>
-				<Text style={styles.sectionText}>Board: {profile.board || '—'}</Text>
-				<Text style={styles.sectionText}>Preferred language: {profile.preferred_language || '—'}</Text>
-				<Text style={styles.sectionText}>Study goal: {profile.study_goal || '—'}</Text>
-			</View>
-
-			<View style={styles.section}>
-				<View style={styles.sectionHeader}>
-					<Text style={styles.sectionTitle}>Your Subjects</Text>
-					<Pressable 
-						style={styles.addButton}
-						onPress={() => {
-							setShowAddSubject(true)
-							loadAvailableSubjects()
-						}}
-					>
-						<Ionicons name="add" size={20} color="#fff" />
-						<Text style={styles.addButtonText}>Add Subject</Text>
-					</Pressable>
+				<View style={styles.section}>
+					<Text style={styles.sectionTitle}>About</Text>
+					<Text style={styles.sectionText}>Grade: {profile.grade_level || '—'}</Text>
+					<Text style={styles.sectionText}>Board: {profile.board || '—'}</Text>
+					<Text style={styles.sectionText}>Preferred language: {profile.preferred_language || '—'}</Text>
+					<Text style={styles.sectionText}>Study goal: {profile.study_goal || '—'}</Text>
 				</View>
-				
-				{/* Current Subjects */}
-				<View style={styles.subjectsContainer}>
-					{profile.user_subjects && profile.user_subjects.length > 0 ? (
-						profile.user_subjects.map((userSubject, i) => (
-							<View key={i} style={styles.subjectCard}>
-								<View style={styles.subjectInfo}>
-									<Text style={styles.subjectName}>{userSubject.subject.name}</Text>
-									<Text style={styles.subjectProgress}>
-										{userSubject.completed_chapters}/{userSubject.total_chapters} chapters • {userSubject.completion_percent}% complete
-									</Text>
+
+				<View style={styles.section}>
+					<View style={styles.sectionHeader}>
+						<Text style={styles.sectionTitle}>Your Subjects</Text>
+						<Pressable
+							style={styles.addButton}
+							onPress={() => {
+								setShowAddSubject(true)
+								loadAvailableSubjects()
+							}}
+						>
+							<Ionicons name="add" size={20} color="#fff" />
+							<Text style={styles.addButtonText}>Add Subject</Text>
+						</Pressable>
+					</View>
+
+					{/* Current Subjects */}
+					<View style={styles.subjectsContainer}>
+						{profile.user_subjects && profile.user_subjects.length > 0 ? (
+							profile.user_subjects.map((userSubject, i) => (
+								<View key={i} style={styles.subjectCard}>
+									<View style={styles.subjectInfo}>
+										<Text style={styles.subjectName}>{userSubject.subject.name}</Text>
+										<Text style={styles.subjectProgress}>
+											{userSubject.completed_chapters}/{userSubject.total_chapters} chapters • {userSubject.completion_percent}% complete
+										</Text>
+									</View>
+									<Pressable
+										style={styles.removeButton}
+										onPress={() => handleRemoveSubject(userSubject.subject_id, userSubject.subject.name)}
+										disabled={actionLoading === userSubject.subject_id}
+									>
+										{actionLoading === userSubject.subject_id ? (
+											<ActivityIndicator size="small" color={THEME.colors.primary} />
+										) : (
+											<Ionicons name="remove-circle" size={24} color={THEME.colors.primary} />
+										)}
+									</Pressable>
 								</View>
-								<Pressable 
-									style={styles.removeButton}
-									onPress={() => handleRemoveSubject(userSubject.subject_id, userSubject.subject.name)}
-									disabled={actionLoading === userSubject.subject_id}
-								>
-									{actionLoading === userSubject.subject_id ? (
-										<ActivityIndicator size="small" color="#ef4444" />
-									) : (
-										<Ionicons name="remove-circle" size={24} color="#ef4444" />
-									)}
-								</Pressable>
-							</View>
-						))
-					) : profile.subjects && profile.subjects.length > 0 ? (
-						// Fallback to old subjects array
-						profile.subjects.map((s, i) => (
-							<View key={i} style={styles.tag}>
-								<Text style={styles.tagText}>{s}</Text>
-							</View>
-						))
-					) : (
-						<Text style={styles.noSubjectsText}>No subjects selected yet</Text>
-					)}
+							))
+						) : profile.subjects && profile.subjects.length > 0 ? (
+							// Fallback to old subjects array
+							profile.subjects.map((s, i) => (
+								<View key={i} style={styles.tag}>
+									<Text style={styles.tagText}>{s}</Text>
+								</View>
+							))
+						) : (
+							<Text style={styles.noSubjectsText}>No subjects selected yet</Text>
+						)}
+					</View>
 				</View>
-			</View>
 
 				<View style={styles.sectionFooter}>
 					<Pressable style={styles.editButton} onPress={() => { /* navigate to edit screen if exists */ }}>
 						<Ionicons name="create-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
 						<Text style={styles.editButtonText}>Edit Profile</Text>
 					</Pressable>
-					
-					<Pressable 
-						style={styles.logoutButtonMain} 
+
+					<Pressable
+						style={styles.logoutButtonMain}
 						onPress={() => {
 							Alert.alert(
 								'Logout',
 								'Are you sure you want to logout?',
 								[
 									{ text: 'Cancel', style: 'cancel' },
-									{ 
-										text: 'Logout', 
+									{
+										text: 'Logout',
 										style: 'destructive',
 										onPress: async () => {
 											try {
@@ -374,7 +375,7 @@ export default function ProfileScreen() {
 						<Ionicons name="log-out-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
 						<Text style={styles.logoutButtonMainText}>Logout</Text>
 					</Pressable>
-					
+
 					<Text style={styles.footerText}>Member since {new Date(profile.created_at).toDateString()}</Text>
 				</View>
 			</ScrollView>
@@ -391,20 +392,20 @@ export default function ProfileScreen() {
 						<View style={styles.modalHeader}>
 							<Text style={styles.modalTitle}>Add New Subject</Text>
 							<Pressable onPress={() => setShowAddSubject(false)}>
-								<Ionicons name="close" size={24} color="#666" />
+								<Ionicons name="close" size={24} color={THEME.colors.text.secondary} />
 							</Pressable>
 						</View>
-						
+
 						<ScrollView style={styles.modalScroll}>
 							{loadingSubjects ? (
 								<View style={styles.modalLoading}>
-									<ActivityIndicator size="large" color="#2563eb" />
+									<ActivityIndicator size="large" color={THEME.colors.primary} />
 									<Text style={styles.modalLoadingText}>Loading available subjects...</Text>
 								</View>
 							) : availableSubjects.length > 0 ? (
 								availableSubjects.map((subject) => (
-									<Pressable 
-										key={subject.id} 
+									<Pressable
+										key={subject.id}
 										style={styles.subjectOption}
 										onPress={() => handleAddSubject(subject.id)}
 										disabled={actionLoading === subject.id}
@@ -416,9 +417,9 @@ export default function ProfileScreen() {
 											)}
 										</View>
 										{actionLoading === subject.id ? (
-											<ActivityIndicator size="small" color="#2563eb" />
+											<ActivityIndicator size="small" color={THEME.colors.primary} />
 										) : (
-											<Ionicons name="add-circle" size={24} color="#10B981" />
+											<Ionicons name="add-circle" size={24} color={THEME.colors.secondary} />
 										)}
 									</Pressable>
 								))
@@ -436,7 +437,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#f8fafc',
+		backgroundColor: THEME.colors.background,
 	},
 	topHeader: {
 		flexDirection: 'row',
@@ -445,9 +446,9 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		paddingTop: 60,
 		paddingBottom: 20,
-		backgroundColor: '#ffffff',
+		backgroundColor: THEME.colors.background,
 		borderBottomWidth: 1,
-		borderBottomColor: '#e5e7eb',
+		borderBottomColor: THEME.colors.border,
 		shadowColor: '#000',
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.05,
@@ -462,7 +463,7 @@ const styles = StyleSheet.create({
 	headerTitle: {
 		fontSize: 20,
 		fontWeight: '700',
-		color: '#111827',
+		color: THEME.colors.text.primary,
 	},
 	logoutButton: {
 		padding: 8,
@@ -512,11 +513,11 @@ const styles = StyleSheet.create({
 	name: {
 		fontSize: 20,
 		fontWeight: '700',
-		color: '#111827',
+		color: THEME.colors.text.primary,
 	},
 	email: {
 		fontSize: 14,
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 		marginTop: 4,
 	},
 	cardRow: {
@@ -540,11 +541,11 @@ const styles = StyleSheet.create({
 	statNumber: {
 		fontSize: 18,
 		fontWeight: '700',
-		color: '#111827',
+		color: THEME.colors.text.primary,
 	},
 	statLabel: {
 		fontSize: 12,
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 		marginTop: 4,
 	},
 	section: {
@@ -561,12 +562,12 @@ const styles = StyleSheet.create({
 	sectionTitle: {
 		fontSize: 16,
 		fontWeight: '600',
-		color: '#111827',
+		color: THEME.colors.text.primary,
 		marginBottom: 8,
 	},
 	sectionText: {
 		fontSize: 14,
-		color: '#374151',
+		color: THEME.colors.text.primary,
 		marginBottom: 4,
 	},
 	tagsContainer: {
@@ -583,18 +584,18 @@ const styles = StyleSheet.create({
 		marginBottom: 8,
 	},
 	tagText: {
-		color: '#374151',
+		color: THEME.colors.text.primary,
 		fontSize: 13,
 	},
 	editButton: {
-		backgroundColor: '#2563eb',
+		backgroundColor: THEME.colors.primary,
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
 		paddingVertical: 14,
 		paddingHorizontal: 20,
 		borderRadius: 12,
-		shadowColor: '#2563eb',
+		shadowColor: THEME.colors.primary,
 		shadowOffset: { width: 0, height: 4 },
 		shadowOpacity: 0.3,
 		shadowRadius: 8,
@@ -611,15 +612,15 @@ const styles = StyleSheet.create({
 	},
 	footerText: {
 		marginTop: 10,
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 		fontSize: 13,
 		textAlign: 'center',
 	},
 	errorText: {
-		color: '#dc2626',
+		color: THEME.colors.primary,
 	},
 	subtle: {
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 	},
 	sectionHeader: {
 		flexDirection: 'row',
@@ -628,7 +629,7 @@ const styles = StyleSheet.create({
 		marginBottom: 8,
 	},
 	addButton: {
-		backgroundColor: '#10B981',
+		backgroundColor: THEME.colors.primary,
 		flexDirection: 'row',
 		alignItems: 'center',
 		paddingHorizontal: 12,
@@ -652,7 +653,7 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'space-between',
 		borderWidth: 1,
-		borderColor: '#e2e8f0',
+		borderColor: THEME.colors.border,
 	},
 	subjectInfo: {
 		flex: 1,
@@ -660,11 +661,11 @@ const styles = StyleSheet.create({
 	subjectName: {
 		fontSize: 14,
 		fontWeight: '600',
-		color: '#111827',
+		color: THEME.colors.text.primary,
 	},
 	subjectProgress: {
 		fontSize: 12,
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 		marginTop: 2,
 	},
 	removeButton: {
@@ -672,7 +673,7 @@ const styles = StyleSheet.create({
 	},
 	noSubjectsText: {
 		fontSize: 14,
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 		fontStyle: 'italic',
 		textAlign: 'center',
 		marginTop: 8,
@@ -701,12 +702,12 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		padding: 20,
 		borderBottomWidth: 1,
-		borderBottomColor: '#e5e7eb',
+		borderBottomColor: THEME.colors.border,
 	},
 	modalTitle: {
 		fontSize: 18,
 		fontWeight: '600',
-		color: '#111827',
+		color: THEME.colors.text.primary,
 	},
 	modalScroll: {
 		maxHeight: 400,
@@ -717,7 +718,7 @@ const styles = StyleSheet.create({
 	},
 	modalLoadingText: {
 		marginTop: 12,
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 	},
 	subjectOption: {
 		flexDirection: 'row',
@@ -733,21 +734,21 @@ const styles = StyleSheet.create({
 	subjectOptionName: {
 		fontSize: 16,
 		fontWeight: '500',
-		color: '#111827',
+		color: THEME.colors.text.primary,
 	},
 	subjectOptionCategory: {
 		fontSize: 12,
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 		marginTop: 2,
 	},
 	noAvailableSubjects: {
 		padding: 40,
 		textAlign: 'center',
-		color: '#6b7280',
+		color: THEME.colors.text.secondary,
 		fontSize: 14,
 	},
 	logoutButtonMain: {
-		backgroundColor: '#ef4444',
+		backgroundColor: THEME.colors.primary,
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
@@ -755,7 +756,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 20,
 		borderRadius: 12,
 		marginTop: 8,
-		shadowColor: '#ef4444',
+		shadowColor: THEME.colors.primary,
 		shadowOffset: { width: 0, height: 4 },
 		shadowOpacity: 0.3,
 		shadowRadius: 8,

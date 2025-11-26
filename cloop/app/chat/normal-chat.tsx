@@ -17,6 +17,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
+import { THEME } from '../../src/constants/theme';
 import { useAuthErrorHandler } from '../../src/hooks/useAuthErrorHandler';
 import {
   fetchNormalChatMessages,
@@ -24,6 +25,8 @@ import {
   clearNormalChatHistory,
   NormalChatMessage
 } from '../../src/client/normal-chat/normal-chat';
+
+const LOGO_IMG = require('../../assets/images/logo.png');
 
 export default function NormalChatScreen() {
   const router = useRouter();
@@ -63,7 +66,7 @@ export default function NormalChatScreen() {
       setMessages(response.messages);
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to load chat');
-      
+
       // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
       if (!wasAuthError) {
@@ -95,7 +98,7 @@ export default function NormalChatScreen() {
       setMessages(prev => [...prev, response.userMessage, response.aiMessage]);
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to send message');
-      
+
       // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
       if (!wasAuthError) {
@@ -114,8 +117,8 @@ export default function NormalChatScreen() {
       'Are you sure you want to clear all your chat history? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear', 
+        {
+          text: 'Clear',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -126,7 +129,7 @@ export default function NormalChatScreen() {
               setMessages([]);
             } catch (err) {
               const error = err instanceof Error ? err : new Error('Failed to clear chat history');
-              
+
               // Handle authentication errors
               const wasAuthError = await handleAuthError(error);
               if (!wasAuthError) {
@@ -151,22 +154,22 @@ export default function NormalChatScreen() {
       ]}>
         {isAI && (
           <View style={styles.aiAvatar}>
-            <Text style={styles.aiAvatarText}>C</Text>
+            <Image source={LOGO_IMG} style={styles.aiAvatarImage} resizeMode="contain" />
           </View>
         )}
-        
+
         <View style={[
           styles.messageBubble,
           isUser ? styles.userMessageBubble : styles.aiMessageBubble
         ]}>
           {hasImage && message.images && (
-            <Image 
+            <Image
               source={{ uri: message.images[0] }}
               style={styles.messageImage}
               resizeMode="cover"
             />
           )}
-          
+
           {message.message && (
             <Text style={[
               styles.messageText,
@@ -175,14 +178,14 @@ export default function NormalChatScreen() {
               {message.message}
             </Text>
           )}
-          
+
           <Text style={[
             styles.messageTime,
             isUser ? styles.userMessageTime : styles.aiMessageTime
           ]}>
-            {new Date(message.created_at).toLocaleTimeString([], { 
-              hour: '2-digit', 
-              minute: '2-digit' 
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
             })}
           </Text>
         </View>
@@ -190,8 +193,8 @@ export default function NormalChatScreen() {
         {isUser && (
           <View style={styles.userAvatar}>
             <Image
-              source={{ 
-                uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10B981&color=fff&size=64` 
+              source={{
+                uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10B981&color=fff&size=64`
               }}
               style={styles.userAvatarImage}
             />
@@ -204,9 +207,9 @@ export default function NormalChatScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#10B981" />
+          <ActivityIndicator size="large" color={THEME.colors.primary} />
           <Text style={styles.loadingText}>Loading chat...</Text>
         </View>
       </SafeAreaView>
@@ -218,7 +221,7 @@ export default function NormalChatScreen() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+          <Ionicons name="alert-circle-outline" size={48} color={THEME.colors.primary} />
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <Pressable style={styles.retryButton} onPress={loadNormalChat}>
@@ -231,24 +234,22 @@ export default function NormalChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+
       {/* Header */}
       <View style={styles.header}>
-        <Pressable 
+        <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
         >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </Pressable>
-        
+
         <View style={styles.headerContent}>
           <View style={styles.headerInfo}>
-            <View style={styles.cloopAvatar}>
-              <Text style={styles.cloopAvatarText}>C</Text>
-            </View>
+            <Image source={LOGO_IMG} style={styles.headerLogo} resizeMode="contain" />
             <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Cloop AI Assistant</Text>
+              <Text style={styles.headerTitle}>Your Assistant</Text>
               <Text style={styles.headerSubtitle}>Your personal study buddy</Text>
             </View>
           </View>
@@ -257,7 +258,7 @@ export default function NormalChatScreen() {
               <View style={styles.onlineDot} />
               <Text style={styles.onlineText}>Online</Text>
             </View>
-            <Pressable 
+            <Pressable
               style={styles.clearButton}
               onPress={handleClearChat}
             >
@@ -267,7 +268,7 @@ export default function NormalChatScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
@@ -281,35 +282,33 @@ export default function NormalChatScreen() {
         >
           {messages.length === 0 ? (
             <View style={styles.emptyState}>
-              <View style={styles.welcomeAvatar}>
-                <Text style={styles.welcomeAvatarText}>C</Text>
-              </View>
+              <Image source={LOGO_IMG} style={styles.welcomeLogo} resizeMode="contain" />
               <Text style={styles.welcomeTitle}>Welcome to Cloop AI! 🎓</Text>
               <Text style={styles.welcomeMessage}>
-                I'm your personal AI study assistant. I can help you with homework, 
+                I'm your personal AI study assistant. I can help you with homework,
                 explain concepts, answer questions, and support your learning journey across all subjects!
               </Text>
               <View style={styles.suggestionsContainer}>
                 <Text style={styles.suggestionsTitle}>Try asking:</Text>
-                <Pressable 
+                <Pressable
                   style={styles.suggestionCard}
                   onPress={() => setInputText("Explain photosynthesis in simple terms")}
                 >
                   <Text style={styles.suggestionText}>Explain photosynthesis in simple terms</Text>
                 </Pressable>
-                <Pressable 
+                <Pressable
                   style={styles.suggestionCard}
                   onPress={() => setInputText("Help me solve this math problem")}
                 >
                   <Text style={styles.suggestionText}>Help me solve this math problem</Text>
                 </Pressable>
-                <Pressable 
+                <Pressable
                   style={styles.suggestionCard}
                   onPress={() => setInputText("What's the difference between mitosis and meiosis?")}
                 >
                   <Text style={styles.suggestionText}>What's the difference between mitosis and meiosis?</Text>
                 </Pressable>
-                <Pressable 
+                <Pressable
                   style={styles.suggestionCard}
                   onPress={() => setInputText("Give me study tips for better focus")}
                 >
@@ -320,11 +319,11 @@ export default function NormalChatScreen() {
           ) : (
             messages.map((message, index) => renderMessage(message, index))
           )}
-          
+
           {sending && (
             <View style={styles.typingIndicator}>
               <View style={styles.aiAvatar}>
-                <Text style={styles.aiAvatarText}>C</Text>
+                <Image source={LOGO_IMG} style={styles.aiAvatarImage} resizeMode="contain" />
               </View>
               <View style={styles.typingBubble}>
                 <View style={styles.typingDots}>
@@ -339,36 +338,33 @@ export default function NormalChatScreen() {
 
         {/* Input Area */}
         <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
+          <View style={styles.inputForm}>
             <TextInput
               style={styles.textInput}
               placeholder="Ask me anything about your studies..."
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={THEME.colors.text.secondary}
               value={inputText}
               onChangeText={setInputText}
-              multiline
-              maxLength={1000}
+              multiline={false}
               editable={!sending}
             />
-            
-            <View style={styles.inputActions}>
-              <Pressable 
-                style={[
-                  styles.sendButton,
-                  (!inputText.trim() || sending) && styles.sendButtonDisabled
-                ]}
-                onPress={handleSendMessage}
-                disabled={!inputText.trim() || sending}
-              >
-                {sending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="send" size={18} color="#fff" />
-                )}
-              </Pressable>
-            </View>
+
+            <Pressable
+              style={[
+                styles.sendButton,
+                (!inputText.trim() || sending) && styles.sendButtonDisabled
+              ]}
+              onPress={handleSendMessage}
+              disabled={!inputText.trim() || sending}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="arrow-up" size={24} color="#fff" />
+              )}
+            </Pressable>
           </View>
-          
+
           <Text style={styles.disclaimer}>
             Powered by OpenAI GPT • Always verify important information
           </Text>
@@ -381,7 +377,7 @@ export default function NormalChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: THEME.colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -391,7 +387,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   errorContainer: {
     flex: 1,
@@ -402,18 +398,18 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#EF4444',
+    color: THEME.colors.primary,
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: THEME.colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -428,9 +424,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 12,
+    backgroundColor: THEME.colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: THEME.colors.border,
   },
   backButton: {
     marginRight: 12,
@@ -446,19 +443,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  cloopAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerLogo: {
+    width: 32,
+    height: 32,
     marginRight: 12,
-  },
-  cloopAvatarText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   headerText: {
     flex: 1,
@@ -466,11 +454,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: THEME.colors.text.primary,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginTop: 1,
   },
   headerActions: {
@@ -511,30 +499,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 48,
   },
-  welcomeAvatar: {
+  welcomeLogo: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 20,
-  },
-  welcomeAvatarText: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: 'bold',
   },
   welcomeTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: THEME.colors.text.primary,
     marginBottom: 12,
     textAlign: 'center',
   },
   welcomeMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
@@ -547,20 +526,25 @@ const styles = StyleSheet.create({
   suggestionsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: THEME.colors.text.primary,
     marginBottom: 12,
   },
   suggestionCard: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: THEME.colors.border,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   suggestionText: {
     fontSize: 14,
-    color: '#374151',
+    color: THEME.colors.text.primary,
   },
   messageContainer: {
     flexDirection: 'row',
@@ -573,16 +557,14 @@ const styles = StyleSheet.create({
   aiAvatar: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  aiAvatarText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+  aiAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   userAvatar: {
     width: 32,
@@ -597,14 +579,19 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     maxWidth: '75%',
-    borderRadius: 18,
-    padding: 12,
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   userMessageBubble: {
-    backgroundColor: '#10B981',
+    backgroundColor: THEME.colors.primary,
+    borderBottomRightRadius: 4,
   },
   aiMessageBubble: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
   messageImage: {
     width: 200,
@@ -620,7 +607,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   aiMessageText: {
-    color: '#111827',
+    color: THEME.colors.text.primary,
   },
   messageTime: {
     fontSize: 11,
@@ -631,7 +618,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   aiMessageTime: {
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -639,10 +626,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   typingBubble: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#fff',
     borderRadius: 18,
     padding: 16,
     paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderBottomLeftRadius: 4,
   },
   typingDots: {
     flexDirection: 'row',
@@ -651,7 +641,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#9CA3AF',
+    backgroundColor: THEME.colors.text.light,
     marginHorizontal: 2,
   },
   typingDot1: {
@@ -666,47 +656,48 @@ const styles = StyleSheet.create({
   inputContainer: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: THEME.colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  inputWrapper: {
+  inputForm: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    alignItems: 'center',
     marginBottom: 8,
   },
   textInput: {
     flex: 1,
+    height: 50,
+    paddingHorizontal: 20,
+    backgroundColor: THEME.colors.background,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    color: THEME.colors.text.primary,
     fontSize: 16,
-    color: '#111827',
-    maxHeight: 100,
-    paddingVertical: 8,
-  },
-  inputActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#10B981',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: THEME.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 12,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: '#D1D5DB',
+    backgroundColor: THEME.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   disclaimer: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
   },
 });

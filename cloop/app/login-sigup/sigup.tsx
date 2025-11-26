@@ -1,8 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Alert, Image, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { signupUser, getSignupOptions } from '../../src/client/signup/signup';
+import { THEME } from '../../src/constants/theme';
 
+const LOGO_IMG = require('../../assets/images/logo.png');
 
 // Initial questions structure - options will be loaded dynamically
 const getQuestionsTemplate = () => [
@@ -18,6 +22,7 @@ const getQuestionsTemplate = () => [
 
 export default function SignupScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
@@ -39,9 +44,9 @@ export default function SignupScreen() {
         setIsLoadingOptions(true);
         const options = await getSignupOptions();
         setOptionsData(options); // Store the full options data
-        
+
         const updatedQuestions = getQuestionsTemplate();
-        
+
         // Update grade_level options: backend now returns an array of grade names (strings)
         const gradeIndex = updatedQuestions.findIndex(q => q.key === 'grade_level');
         if (gradeIndex !== -1) {
@@ -54,25 +59,25 @@ export default function SignupScreen() {
             return `${levelPart}${g.description ? ` - ${g.description}` : ''}`
           })
         }
-        
+
         // Update board options
         const boardIndex = updatedQuestions.findIndex(q => q.key === 'board');
         if (boardIndex !== -1) {
           updatedQuestions[boardIndex].options = options.boards.map(board => board.name);
         }
-        
+
         // Update subjects options
         const subjectIndex = updatedQuestions.findIndex(q => q.key === 'subjects');
         if (subjectIndex !== -1) {
           updatedQuestions[subjectIndex].options = options.subjects.map(subject => subject.name);
         }
-        
+
         // Update preferred_language options
         const languageIndex = updatedQuestions.findIndex(q => q.key === 'preferred_language');
         if (languageIndex !== -1) {
           updatedQuestions[languageIndex].options = options.languages.map(language => language.name);
         }
-        
+
         setQuestions(updatedQuestions);
         // Add the first message after options are loaded
         setMessages([{ id: 1, text: updatedQuestions[0].bot, sender: 'bot' }]);
@@ -134,11 +139,11 @@ export default function SignupScreen() {
       submitForm(newData);
     }
   };
-  
+
   const submitForm = async (finalFormData: Record<string, any>) => {
     setIsLoading(true);
     addMessage("Thanks! Creating your account now, please wait...", 'bot');
-      try {
+    try {
       // Build payload and only include fields that have values.
       const payload: any = {
         name: finalFormData.name || '',
@@ -189,9 +194,9 @@ export default function SignupScreen() {
     setFormData(newFormData);
     proceedToNextQuestion(newFormData);
   };
-  
+
   const handleSubjectToggle = (subject: string) => {
-    setSelectedSubjects(prev => 
+    setSelectedSubjects(prev =>
       prev.includes(subject) ? prev.filter(s => s !== subject) : [...prev, subject]
     );
   };
@@ -199,8 +204,8 @@ export default function SignupScreen() {
   const handleSubjectSubmit = () => {
     if (isLoading) return;
     if (selectedSubjects.length === 0 && currentQuestion.required) {
-        Alert.alert("Selection Required", "Please select at least one subject.");
-        return;
+      Alert.alert("Selection Required", "Please select at least one subject.");
+      return;
     }
     const subjectsString = selectedSubjects.join(', ');
     addMessage(subjectsString || "Skipped", 'user');
@@ -226,7 +231,7 @@ export default function SignupScreen() {
         </View>
       );
     }
-    
+
     if (currentQuestion.type === 'multi-choice') {
       return (
         <View>
@@ -234,9 +239,9 @@ export default function SignupScreen() {
             {currentQuestion.options?.map(subject => {
               const isSelected = selectedSubjects.includes(subject);
               return (
-                <TouchableOpacity 
-                  key={subject} 
-                  style={[styles.optionButton, isSelected && styles.optionButtonSelected]} 
+                <TouchableOpacity
+                  key={subject}
+                  style={[styles.optionButton, isSelected && styles.optionButtonSelected]}
                   onPress={() => handleSubjectToggle(subject)}
                 >
                   <Text style={[styles.optionButtonText, isSelected && styles.optionButtonTextSelected]}>{subject}</Text>
@@ -254,15 +259,20 @@ export default function SignupScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.logo}><Text style={styles.logoText}>C</Text></View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <Image source={LOGO_IMG} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>Create Your Account</Text>
       </View>
 
       {isLoadingOptions ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#10B981" />
+          <ActivityIndicator size="large" color={THEME.colors.primary} />
           <Text style={styles.loadingText}>Loading signup options...</Text>
         </View>
       ) : (
@@ -271,36 +281,44 @@ export default function SignupScreen() {
             {messages.map((msg) => (
               <View key={msg.id} style={[styles.messageWrapper, msg.sender === 'user' ? styles.userMessage : styles.botMessage]}>
                 <View style={[
-                    styles.messageBubble, 
-                    msg.sender === 'user' ? styles.userBubble : styles.botBubble,
-                    msg.type === 'error' ? styles.errorBubble : null
+                  styles.messageBubble,
+                  msg.sender === 'user' ? styles.userBubble : styles.botBubble,
+                  msg.type === 'error' ? styles.errorBubble : null
                 ]}>
                   <Text style={[
-                      styles.messageText,
-                      msg.sender === 'user' ? styles.userMessageText : styles.botMessageText
+                    styles.messageText,
+                    msg.sender === 'user' ? styles.userMessageText : styles.botMessageText
                   ]}>{msg.text}</Text>
                 </View>
               </View>
             ))}
             {renderCurrentOptions()}
-            {isLoading && <ActivityIndicator style={{ marginTop: 20 }} size="large" color="#10B981" />}
+            {isLoading && <ActivityIndicator style={{ marginTop: 20 }} size="large" color={THEME.colors.primary} />}
           </ScrollView>
 
-          <View style={styles.inputSection}>
+          <View style={[styles.inputSection, { paddingBottom: Math.max(insets.bottom, 20) }]}>
             {!isLastQuestion && currentQuestion?.type === 'text' && (
               <View style={styles.inputForm}>
                 <TextInput
                   style={styles.chatInput}
                   placeholder="Type your answer..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={THEME.colors.text.secondary}
                   value={input}
                   onChangeText={setInput}
                   editable={!isLoading}
                   returnKeyType="send"
                   onSubmitEditing={handleSendText}
                 />
-                <TouchableOpacity style={styles.sendButton} onPress={handleSendText} disabled={isLoading}>
-                   <Text style={styles.sendIcon}>➤</Text>
+                <TouchableOpacity
+                  style={[styles.sendButton, isLoading && styles.sendButtonDisabled]}
+                  onPress={handleSendText}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Ionicons name="arrow-up" size={24} color="#fff" />
+                  )}
                 </TouchableOpacity>
               </View>
             )}
@@ -313,32 +331,34 @@ export default function SignupScreen() {
           </View>
         </>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: 12,
-    paddingHorizontal: 16, 
-    backgroundColor: '#FFFFFF', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#E5E7EB' 
+  container: {
+    flex: 1,
+    backgroundColor: THEME.colors.background
   },
-  logo: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 20, 
-    backgroundColor: '#10B981', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginRight: 12 
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: THEME.spacing.m,
+    paddingBottom: THEME.spacing.m,
+    backgroundColor: THEME.colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border
   },
-  logoText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  logo: {
+    width: 32,
+    height: 32,
+    marginRight: THEME.spacing.s
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: THEME.colors.text.primary
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -348,44 +368,70 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
   },
   chatArea: { flex: 1 },
-  chatAreaContent: { padding: 16, paddingBottom: 24 },
+  chatAreaContent: { padding: THEME.spacing.m, paddingBottom: 24 },
   messageWrapper: { marginBottom: 12, maxWidth: '85%' },
   userMessage: { alignSelf: 'flex-end' },
   botMessage: { alignSelf: 'flex-start' },
-  messageBubble: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20 },
-  botBubble: { backgroundColor: '#F3F4F6', borderBottomLeftRadius: 4 },
-  userBubble: { backgroundColor: '#10B981', borderBottomRightRadius: 4 },
-  errorBubble: { backgroundColor: '#FEE2E2' },
-  messageText: { fontSize: 15, lineHeight: 22 },
-  botMessageText: { color: '#1F2937' },
+  messageBubble: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 20 },
+  botBubble: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  userBubble: {
+    backgroundColor: THEME.colors.primary,
+    borderBottomRightRadius: 4
+  },
+  errorBubble: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+  messageText: { fontSize: 16, lineHeight: 24 },
+  botMessageText: { color: THEME.colors.text.primary },
   userMessageText: { color: '#FFFFFF' },
-  inputSection: { padding: 16, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
+
+  inputSection: {
+    padding: THEME.spacing.m,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.border,
+    backgroundColor: '#FFFFFF'
+  },
   inputForm: { flexDirection: 'row', alignItems: 'center' },
-  chatInput: { 
-    flex: 1, 
-    height: 48, 
-    paddingHorizontal: 16, 
-    backgroundColor: '#F3F4F6', 
-    borderRadius: 24,
+  chatInput: {
+    flex: 1,
+    height: 50,
+    paddingHorizontal: 20,
+    backgroundColor: THEME.colors.background,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
     fontSize: 16,
-    color: '#111827',
+    color: THEME.colors.text.primary,
     marginRight: 8,
   },
-  sendButton: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    backgroundColor: '#10B981', 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  sendButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: THEME.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  sendIcon: { color: '#fff', fontSize: 20, transform: [{ rotate: '0deg' }] },
-  bottomLinkContainer: { marginTop: 12, alignItems: 'center' },
-  signinLink: { color: '#10B981', fontWeight: '600', fontSize: 14 },
+  sendButtonDisabled: {
+    backgroundColor: THEME.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  bottomLinkContainer: { marginTop: 16, alignItems: 'center' },
+  signinLink: { color: THEME.colors.primary, fontWeight: '600', fontSize: 14 },
+
   optionsContainer: {
     marginTop: 8,
     alignSelf: 'flex-start',
@@ -394,7 +440,7 @@ const styles = StyleSheet.create({
   optionButton: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: THEME.colors.border,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -402,11 +448,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionButtonSelected: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    backgroundColor: THEME.colors.primary,
+    borderColor: THEME.colors.primary,
   },
   optionButtonText: {
-    color: '#10B981',
+    color: THEME.colors.primary,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -414,7 +460,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   submitButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: THEME.colors.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',

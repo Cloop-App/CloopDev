@@ -1,12 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Image, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { loginUser } from '../../src/client/login/login';
 import { useAuth } from '../../src/context/AuthContext';
+import { THEME } from '../../src/constants/theme';
+
+const LOGO_IMG = require('../../assets/images/logo.png');
 
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
+  const insets = useSafeAreaInsets();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Array<{ id: number; text: string; sender: string }>>([
@@ -19,7 +25,7 @@ export default function LoginScreen() {
       try {
         // @ts-ignore
         scrollRef.current.scrollToEnd({ animated: true });
-      } catch (e) {}
+      } catch (e) { }
     }
   }, [messages]);
 
@@ -36,7 +42,7 @@ export default function LoginScreen() {
       const userName = res?.user?.name || '';
       const successMessage = { id: Date.now() + 1, text: `Great${userName ? `, ${userName}` : ''}! Logging you in...`, sender: 'bot' };
       setMessages(prev => [...prev, successMessage]);
-      
+
       // Store authentication data - ensure we have a valid token
       if (res.user) {
         const token = res.token || null;
@@ -45,7 +51,7 @@ export default function LoginScreen() {
         }
         await login(token, res.user);
       }
-      
+
       setTimeout(() => router.push('/home/home'), 800);
     } catch (err) {
       const errorMessageText = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -57,35 +63,55 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.logo}><Text style={styles.logoText}>C</Text></View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <Image source={LOGO_IMG} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>Cloop</Text>
       </View>
 
       <ScrollView ref={scrollRef} style={styles.chatArea} contentContainerStyle={styles.chatAreaContent}>
         {messages.map((msg) => (
           <View key={msg.id} style={[styles.messageWrapper, msg.sender === 'user' ? styles.userMessage : styles.botMessage]}>
-            <View style={styles.messageBubble}>
-              <Text style={styles.messageText}>{msg.text}</Text>
+            <View style={[
+              styles.messageBubble,
+              msg.sender === 'user' ? styles.userBubble : styles.botBubble
+            ]}>
+              <Text style={[
+                styles.messageText,
+                msg.sender === 'user' ? styles.userMessageText : styles.botMessageText
+              ]}>{msg.text}</Text>
             </View>
           </View>
         ))}
       </ScrollView>
 
-      <View style={styles.inputSection}>
+      <View style={[styles.inputSection, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <View style={styles.inputForm}>
           <TextInput
             style={styles.chatInput}
             placeholder="Email or phone..."
+            placeholderTextColor={THEME.colors.text.secondary}
             value={input}
             onChangeText={setInput}
             editable={!isLoading}
             returnKeyType="send"
             onSubmitEditing={handleSend}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={isLoading || !input.trim()}>
-            {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendIcon}>➤</Text>}
+          <TouchableOpacity
+            style={[styles.sendButton, (!input.trim() || isLoading) && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={isLoading || !input.trim()}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Ionicons name="arrow-up" size={24} color="#fff" />
+            )}
           </TouchableOpacity>
         </View>
         <View style={styles.bottomLinkContainer}>
@@ -94,28 +120,95 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#F9FAFB', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
-  logo: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  logoText: { color: '#fff', fontWeight: '700' },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  container: {
+    flex: 1,
+    backgroundColor: THEME.colors.background
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: THEME.spacing.m,
+    paddingBottom: THEME.spacing.m,
+    backgroundColor: THEME.colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border
+  },
+  logo: {
+    width: 32,
+    height: 32,
+    marginRight: THEME.spacing.s
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: THEME.colors.text.primary
+  },
   chatArea: { flex: 1 },
-  chatAreaContent: { padding: 16 },
-  messageWrapper: { marginBottom: 12, maxWidth: '80%' },
+  chatAreaContent: { padding: THEME.spacing.m },
+  messageWrapper: { marginBottom: THEME.spacing.m, maxWidth: '80%' },
   userMessage: { alignSelf: 'flex-end' },
   botMessage: { alignSelf: 'flex-start' },
-  messageBubble: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 18, backgroundColor: '#F3F4F6' },
-  messageText: { color: '#111827' },
-  inputSection: { padding: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB' },
+  messageBubble: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 20
+  },
+  userBubble: {
+    backgroundColor: THEME.colors.primary,
+    borderBottomRightRadius: 4,
+  },
+  botBubble: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  messageText: { fontSize: 16, lineHeight: 24 },
+  userMessageText: { color: '#FFFFFF' },
+  botMessageText: { color: THEME.colors.text.primary },
+
+  inputSection: {
+    padding: THEME.spacing.m,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.border,
+    backgroundColor: '#FFFFFF'
+  },
   inputForm: { flexDirection: 'row', alignItems: 'center' },
-  chatInput: { flex: 1, height: 48, paddingHorizontal: 12, backgroundColor: '#F3F4F6', borderRadius: 999 },
-  sendButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
-  sendIcon: { color: '#fff', fontSize: 18, transform: [{ rotate: '90deg' }] },
-  bottomLinkContainer: { marginTop: 8, alignItems: 'center' },
-  signupLink: { color: '#10B981', fontWeight: '600' },
+  chatInput: {
+    flex: 1,
+    height: 50,
+    paddingHorizontal: 20,
+    backgroundColor: THEME.colors.background,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    color: THEME.colors.text.primary,
+    fontSize: 16,
+  },
+  sendButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: THEME.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: THEME.spacing.s,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  sendButtonDisabled: {
+    backgroundColor: THEME.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  bottomLinkContainer: { marginTop: 16, alignItems: 'center' },
+  signupLink: { color: THEME.colors.primary, fontWeight: '600', fontSize: 14 },
 });

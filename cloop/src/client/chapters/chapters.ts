@@ -58,38 +58,57 @@ export interface TopicsResponse {
  */
 export const fetchChapters = async (
   subjectId: number,
-  opts?: { 
-    userId?: number; 
-    baseUrl?: string; 
+  opts?: {
+    userId?: number;
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<ChaptersResponse> => {
   const base = opts?.baseUrl || API_BASE_URL;
   const url = new URL(`/api/chapters/${subjectId}`, base);
-  
+
   if (opts?.userId) {
     url.searchParams.set('user_id', String(opts.userId));
   }
+
+  console.log('[ChaptersClient] fetchChapters request:', {
+    url: url.toString(),
+    method: 'GET',
+    hasToken: !!opts?.token
+  });
 
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (opts?.token) {
     headers.Authorization = `Bearer ${opts.token}`;
   }
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers,
-  });
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers,
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    if (response.status === 401) {
-      throw new Error('Authentication required - please login again');
+    console.log('[ChaptersClient] fetchChapters response status:', response.status);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      console.error('[ChaptersClient] fetchChapters error body:', error);
+      if (response.status === 401) {
+        throw new Error('Authentication required - please login again');
+      }
+      throw new Error(error.error || 'Failed to fetch chapters');
     }
-    throw new Error(error.error || 'Failed to fetch chapters');
-  }
 
-  return response.json();
+    const data = await response.json();
+    console.log('[ChaptersClient] fetchChapters data received:', {
+      chaptersCount: data.chapters?.length,
+      subject: data.subject?.name
+    });
+    return data;
+  } catch (error) {
+    console.error('[ChaptersClient] fetchChapters network/parsing error:', error);
+    throw error;
+  }
 };
 
 /**
@@ -97,15 +116,15 @@ export const fetchChapters = async (
  */
 export const fetchTopics = async (
   chapterId: number,
-  opts?: { 
-    userId?: number; 
-    baseUrl?: string; 
+  opts?: {
+    userId?: number;
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<TopicsResponse> => {
   const base = opts?.baseUrl || API_BASE_URL;
   const url = new URL(`/api/topics/${chapterId}`, base);
-  
+
   if (opts?.userId) {
     url.searchParams.set('user_id', String(opts.userId));
   }

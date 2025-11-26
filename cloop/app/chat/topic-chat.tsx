@@ -11,13 +11,15 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Image
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAuthErrorHandler } from '../../src/hooks/useAuthErrorHandler';
 import { API_BASE_URL } from '../../src/config/api';
+import { THEME } from '../../src/constants/theme';
 import MessageBubble from '../../components/chat/MessageBubble';
 import GoalsProgressBar from '../../components/chat/GoalsProgressBar';
 import {
@@ -27,6 +29,8 @@ import {
   TopicChatDetails,
   TopicGoal
 } from '../../src/client/topic-chat/topic-chat';
+
+const LOGO_IMG = require('../../assets/images/logo.png');
 
 export default function TopicChatScreen() {
   const router = useRouter();
@@ -128,12 +132,12 @@ export default function TopicChatScreen() {
 
       setTopic(response.topic);
       setGoals(response.goals || []);
-      
+
       // Set initial time spent from database
       const timeSpent = response.topic?.time_spent_seconds || 0;
       setInitialTimeSpent(timeSpent);
       setSessionStartTime(new Date()); // Reset session start time
-      
+
       // If there are no messages but there's an initial greeting, add it
       if (response.messages.length === 0 && response.initialGreeting) {
         const greetingMessages: TopicChatMessage[] = response.initialGreeting.map((msg, idx) => ({
@@ -150,7 +154,7 @@ export default function TopicChatScreen() {
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to load chat');
-      
+
       // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
       if (!wasAuthError) {
@@ -182,9 +186,9 @@ export default function TopicChatScreen() {
 
       const response = await sendTopicChatMessage(
         parseInt(topicId!),
-        { 
+        {
           message: textToSend,
-          session_time_seconds: currentSessionTime 
+          session_time_seconds: currentSessionTime
         },
         {
           userId: user?.user_id,
@@ -194,7 +198,7 @@ export default function TopicChatScreen() {
 
       // aiMessages may be returned as `aiMessages` (new) or `messages` (alias)
       const aiMsgs: TopicChatMessage[] = (response as any).messages || (response as any).aiMessages || [];
-      
+
       // Add feedback to the feedback map for user message
       // Capture into locals because TypeScript doesn't narrow across closures reliably
       const userCorrection = (response as any).userCorrection ?? null;
@@ -216,13 +220,6 @@ export default function TopicChatScreen() {
         });
       }
 
-      // -----------------------------------------------------------------
-      // --- START: CORRECTED CODE BLOCK ---
-      // -----------------------------------------------------------------
-      // The old if/else (response.userCorrection) block is removed.
-      // We now trust the feedbackMap to update the user bubble.
-      // We just need to append AI messages and check for a summary.
-
       // Convert AI messages and add unique IDs
       const newAIMessages = aiMsgs.map(m => {
         const msg: any = {
@@ -231,7 +228,7 @@ export default function TopicChatScreen() {
           emoji: m.emoji || undefined,
           created_at: new Date().toISOString()
         };
-        
+
         // If this is a session_summary message, parse metrics from diff_html
         if (m.message_type === 'session_summary' && m.diff_html) {
           try {
@@ -240,7 +237,7 @@ export default function TopicChatScreen() {
             console.error('Failed to parse session metrics from diff_html:', e);
           }
         }
-        
+
         return msg;
       });
 
@@ -305,13 +302,9 @@ export default function TopicChatScreen() {
         }
       }
 
-      // -----------------------------------------------------------------
-      // --- END: CORRECTED CODE BLOCK ---
-      // -----------------------------------------------------------------
-
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to send message');
-      
+
       // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
       if (!wasAuthError) {
@@ -361,7 +354,7 @@ export default function TopicChatScreen() {
           emoji: m.emoji || undefined,
           created_at: m.created_at || new Date().toISOString()
         };
-        
+
         // Parse session_metrics from diff_html if present
         if (m.message_type === 'session_summary' && m.diff_html) {
           try {
@@ -370,16 +363,13 @@ export default function TopicChatScreen() {
             console.error('Failed to parse session metrics from option response:', e);
           }
         }
-        
+
         return msg;
       });
 
       if (aiMsgs.length > 0) {
         setMessages(prev => [...prev, ...aiMsgs]);
       }
-
-      // Note: Options after "Explain" now appear on AI's last message bubble (not user_correction)
-      // The AI response includes options in the last message's options array
 
       // Optionally update feedbackMap if server returned feedback
       if (data.feedback && chatId) {
@@ -407,15 +397,8 @@ export default function TopicChatScreen() {
 
   const renderMessage = (message: TopicChatMessage, index: number) => {
     const isUser = message.sender === 'user';
-    
-    // Get feedback for this message (for user messages)
     const feedback = feedbackMap.get(message.id);
-    
-    // -----------------------------------------------------------------
-    // --- START: CORRECTED CODE BLOCK ---
-    // -----------------------------------------------------------------
-    
-    // Set defaults from the message object itself
+
     let bubbleColor: 'green' | 'red' | 'yellow' | 'default' = 'default';
     let isCorrect: boolean | undefined = undefined;
     let emoji: string | undefined = undefined;
@@ -424,30 +407,23 @@ export default function TopicChatScreen() {
     let diffHtml = message.diff_html;
     let completeAnswer: string | undefined = (message as any).complete_answer;
 
-    // If this is a user message AND we have feedback for it, override the props
     if (isUser && feedback) {
       diffHtml = feedback.diff_html || diffHtml;
       options = feedback.options || options;
       bubbleColor = feedback.bubble_color || (feedback.is_correct ? 'green' : 'red');
       isCorrect = feedback.is_correct;
       completeAnswer = feedback.complete_answer || completeAnswer;
-      
-      // If we have correction details, set the type
+
       if (feedback.diff_html || feedback.complete_answer) {
         messageType = 'user_correction';
       }
     }
-    // -----------------------------------------------------------------
-    // --- END: CORRECTED CODE BLOCK ---
-    // -----------------------------------------------------------------
 
-    // For AI messages, check if there's embedded feedback
     if (!isUser && message.feedback) {
       bubbleColor = message.feedback.bubble_color || 'default';
       emoji = message.feedback.emoji;
     }
-    
-    // Also check if message itself has emoji (from API response)
+
     if (message.emoji && !emoji) {
       emoji = message.emoji;
     }
@@ -457,23 +433,22 @@ export default function TopicChatScreen() {
         styles.messageRow,
         isUser ? styles.userMessageRow : styles.aiMessageRow
       ]}>
-        {/* AI Avatar on Left */}
         {!isUser && (
           <View style={styles.aiAvatar}>
-            <Text style={styles.aiAvatarText}>C</Text>
+            <Image source={LOGO_IMG} style={styles.aiAvatarImage} resizeMode="contain" />
           </View>
         )}
-        
+
         <View style={[
           styles.bubbleWrapper,
           isUser ? styles.userBubbleWrapper : styles.aiBubbleWrapper
         ]}>
           <MessageBubble
-            message={message.message || ''} // <-- This is now ALWAYS the original text
+            message={message.message || ''}
             messageType={messageType}
             options={options}
             diffHtml={diffHtml}
-            completeAnswer={completeAnswer} // <-- ADDED THIS NEW PROP
+            completeAnswer={completeAnswer}
             chatId={message.id}
             fileUrl={message.file_url}
             fileType={message.file_type}
@@ -487,10 +462,14 @@ export default function TopicChatScreen() {
           />
         </View>
 
-        {/* User Avatar on Right */}
         {isUser && (
           <View style={styles.userAvatar}>
-            <Ionicons name="person" size={20} color="#fff" />
+            <Image
+              source={{
+                uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10B981&color=fff&size=64`
+              }}
+              style={styles.userAvatarImage}
+            />
           </View>
         )}
       </View>
@@ -502,7 +481,7 @@ export default function TopicChatScreen() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#10B981" />
+          <ActivityIndicator size="large" color={THEME.colors.primary} />
           <Text style={styles.loadingText}>Starting your learning session...</Text>
         </View>
       </SafeAreaView>
@@ -514,7 +493,7 @@ export default function TopicChatScreen() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+          <Ionicons name="alert-circle-outline" size={48} color={THEME.colors.error} />
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <Pressable style={styles.retryButton} onPress={loadTopicChat}>
@@ -528,21 +507,24 @@ export default function TopicChatScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
-        <Pressable 
+        <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
         </Pressable>
-        
+
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{topic?.title || topicTitle}</Text>
-          <View style={styles.timerContainer}>
-            <Ionicons name="time-outline" size={16} color="#fff" />
-            <Text style={styles.timerText}>{elapsedTime}</Text>
+          <Image source={LOGO_IMG} style={styles.headerLogo} resizeMode="contain" />
+          <View style={styles.headerText}>
+            <Text style={styles.headerTitle}>{topic?.title || topicTitle}</Text>
+            <View style={styles.timerContainer}>
+              <Ionicons name="time-outline" size={14} color={THEME.colors.text.secondary} />
+              <Text style={styles.timerText}>{elapsedTime}</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -558,9 +540,9 @@ export default function TopicChatScreen() {
         </Text>
       </View>
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* Messages */}
@@ -569,13 +551,14 @@ export default function TopicChatScreen() {
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {messages.map((message, index) => renderMessage(message, index))}
-          
+
           {sending && (
             <View style={styles.typingIndicator}>
               <View style={styles.aiAvatar}>
-                <Ionicons name="logo-android" size={20} color="#fff" />
+                <Image source={LOGO_IMG} style={styles.aiAvatarImage} resizeMode="contain" />
               </View>
               <View style={styles.typingBubble}>
                 <View style={styles.typingDots}>
@@ -590,11 +573,11 @@ export default function TopicChatScreen() {
 
         {/* Input Area */}
         <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
+          <View style={styles.inputForm}>
             <TextInput
               style={styles.textInput}
               placeholder="Type your answer..."
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={THEME.colors.text.secondary}
               value={inputText}
               onChangeText={setInputText}
               multiline
@@ -604,8 +587,8 @@ export default function TopicChatScreen() {
               onBlur={() => setIsInputFocused(false)}
               onSubmitEditing={() => handleSendMessage()}
             />
-            
-            <Pressable 
+
+            <Pressable
               style={[
                 styles.sendButton,
                 (!inputText.trim() || sending) && styles.sendButtonDisabled
@@ -616,7 +599,7 @@ export default function TopicChatScreen() {
               {sending ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Ionicons name="send" size={18} color="#fff" />
+                <Ionicons name="arrow-up" size={24} color="#fff" />
               )}
             </Pressable>
           </View>
@@ -629,7 +612,7 @@ export default function TopicChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: THEME.colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -639,7 +622,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   errorContainer: {
     flex: 1,
@@ -650,18 +633,18 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#EF4444',
+    color: THEME.colors.primary,
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: THEME.colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -674,36 +657,43 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#EF4444',
+    paddingVertical: 12,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 12,
+    backgroundColor: THEME.colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border,
   },
   backButton: {
-    position: 'absolute',
-    left: 16,
+    marginRight: 12,
   },
   headerContent: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  headerLogo: {
+    width: 32,
+    height: 32,
+    marginRight: 12,
+  },
+  headerText: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
+    color: THEME.colors.text.primary,
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    marginTop: 2,
   },
   timerText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '600',
+    fontSize: 13,
+    color: THEME.colors.text.secondary,
+    fontWeight: '500',
     marginLeft: 4,
   },
   contextBar: {
@@ -728,14 +718,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    padding: 8,
+    padding: 16,
     paddingBottom: 8,
   },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 12,
-    alignItems: 'flex-start',
-    maxWidth: '100%',
+    marginBottom: 16,
+    alignItems: 'flex-end',
   },
   aiMessageRow: {
     justifyContent: 'flex-start',
@@ -756,42 +745,39 @@ const styles = StyleSheet.create({
   aiAvatar: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#8B5CF6',
-    alignItems: 'center',
+    marginRight: 8,
     justifyContent: 'center',
-    marginRight: 6,
-    marginTop: 2,
-    flexShrink: 0,
+    alignItems: 'center',
   },
-  aiAvatarText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  aiAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   userAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#2563EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-    marginTop: 2,
-    flexShrink: 0,
+    marginLeft: 8,
+  },
+  userAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   typingIndicator: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    maxWidth: '100%',
+    alignItems: 'flex-end',
+    marginBottom: 16,
   },
   typingBubble: {
-    backgroundColor: '#DDD6FE',
-    borderRadius: 16,
-    padding: 12,
-    paddingHorizontal: 16,
-    maxWidth: '70%',
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderBottomLeftRadius: 4,
   },
   typingDots: {
     flexDirection: 'row',
@@ -800,7 +786,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#9CA3AF',
+    backgroundColor: THEME.colors.text.light,
     marginHorizontal: 2,
   },
   typingDot1: {
@@ -815,37 +801,43 @@ const styles = StyleSheet.create({
   inputContainer: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: THEME.colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  inputWrapper: {
+  inputForm: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   textInput: {
     flex: 1,
+    height: 50,
+    paddingHorizontal: 20,
+    backgroundColor: THEME.colors.background,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    color: THEME.colors.text.primary,
     fontSize: 16,
-    color: '#111827',
-    maxHeight: 100,
-    paddingVertical: 8,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#10B981',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: THEME.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: 12,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: '#D1D5DB',
-  },
+    backgroundColor: THEME.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  }
 });

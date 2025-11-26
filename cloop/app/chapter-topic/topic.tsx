@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Pressable, 
-  ScrollView, 
-  SafeAreaView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  SafeAreaView,
   StatusBar,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { fetchTopics, Topic, ChapterDetails } from '../../src/client/chapters/chapters';
+import { THEME } from '../../src/constants/theme';
 
 export default function TopicScreen() {
   const router = useRouter();
@@ -22,7 +24,7 @@ export default function TopicScreen() {
     subjectName: string;
   }>();
   const { user, token } = useAuth();
-  
+
   const [topics, setTopics] = useState<Topic[]>([]);
   const [chapter, setChapter] = useState<ChapterDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,12 +40,12 @@ export default function TopicScreen() {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await fetchTopics(parseInt(chapterId!), {
         userId: user?.user_id,
         token: token || undefined
       });
-      
+
       setTopics(response.topics);
       setChapter(response.chapter);
     } catch (err) {
@@ -69,15 +71,15 @@ export default function TopicScreen() {
 
   const getCompletionColor = (percentage: number) => {
     if (percentage >= 80) return '#10B981'; // Green
-    if (percentage >= 50) return '#F59E0B'; // Yellow
-    return '#EF4444'; // Red
+    if (percentage >= 50) return THEME.colors.secondary; // Yellow
+    return THEME.colors.primary; // Red
   };
 
   const formatTimeSpent = (seconds: number) => {
     if (seconds === 0) return 'Not started';
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m`;
     } else if (minutes > 0) {
@@ -91,96 +93,97 @@ export default function TopicScreen() {
     // Parse completion_percent properly
     const completionPercent = Number(topic.completion_percent) || 0;
     const timeSpentSeconds = topic.time_spent_seconds || 0;
-    
+
     return (
-    <Pressable 
-      key={topic.id} 
-      style={[
-        styles.topicCard,
-        topic.is_completed && styles.completedTopicCard
-      ]}
-      onPress={() => handleTopicPress(topic)}
-    >
-      <View style={styles.topicHeader}>
-        <View style={styles.topicIconContainer}>
-          <Ionicons 
-            name={getStatusIcon(topic.is_completed)} 
-            size={24} 
-            color={getStatusColor(topic.is_completed)}
-          />
-        </View>
-        <View style={styles.topicInfo}>
-          <Text style={[
-            styles.topicTitle,
-            topic.is_completed && styles.completedTopicTitle
-          ]}>
-            {topic.title}
-          </Text>
-          <Text style={styles.topicNumber}>Topic {index + 1}</Text>
-        </View>
-        <View style={styles.topicActions}>
-          {topic.is_completed && (
-            <View style={styles.completedBadge}>
-              <Text style={styles.completedBadgeText}>Completed</Text>
-            </View>
-          )}
-          <Ionicons 
-            name="chevron-forward" 
-            size={20} 
-            color="#9CA3AF" 
-          />
-        </View>
-      </View>
-      
-      {completionPercent > 0 && (
-        <View style={styles.progressSection}>
-          <View style={styles.progressInfo}>
-            <Text style={styles.progressText}>Progress</Text>
-            <Text style={[
-              styles.completionPercentage,
-              { color: getCompletionColor(completionPercent) }
-            ]}>
-              {Math.round(completionPercent)}% Complete
-            </Text>
+      <Pressable
+        key={topic.id}
+        style={[
+          styles.topicCard,
+          topic.is_completed && styles.completedTopicCard
+        ]}
+        onPress={() => handleTopicPress(topic)}
+      >
+        <View style={styles.topicHeader}>
+          <View style={styles.topicIconContainer}>
+            <Ionicons
+              name={getStatusIcon(topic.is_completed)}
+              size={24}
+              color={getStatusColor(topic.is_completed)}
+            />
           </View>
-          
-          <View style={styles.progressBarContainer}>
-            <View 
-              style={[
-                styles.progressBar,
-                { 
-                  width: `${completionPercent}%`,
-                  backgroundColor: getCompletionColor(completionPercent)
-                }
-              ]} 
+          <View style={styles.topicInfo}>
+            <Text style={[
+              styles.topicTitle,
+              topic.is_completed && styles.completedTopicTitle
+            ]}>
+              {topic.title}
+            </Text>
+            <Text style={styles.topicNumber}>Topic {index + 1}</Text>
+          </View>
+          <View style={styles.topicActions}>
+            {topic.is_completed && (
+              <View style={styles.completedBadge}>
+                <Text style={styles.completedBadgeText}>Completed</Text>
+              </View>
+            )}
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={THEME.colors.text.secondary}
             />
           </View>
         </View>
-      )}
 
-      <View style={styles.topicFooter}>
-        <View style={styles.topicMeta}>
-          <Ionicons name="time-outline" size={14} color="#6B7280" />
-          <Text style={styles.metaText}>
-            {formatTimeSpent(timeSpentSeconds)}
-          </Text>
-        </View>
-        {topic.content && (
-          <View style={styles.topicMeta}>
-            <Ionicons name="document-text-outline" size={14} color="#6B7280" />
-            <Text style={styles.metaText}>Has content</Text>
+        {completionPercent > 0 && (
+          <View style={styles.progressSection}>
+            <View style={styles.progressInfo}>
+              <Text style={styles.progressText}>Progress</Text>
+              <Text style={[
+                styles.completionPercentage,
+                { color: getCompletionColor(completionPercent) }
+              ]}>
+                {Math.round(completionPercent)}% Complete
+              </Text>
+            </View>
+
+            <View style={styles.progressBarContainer}>
+              <View
+                style={[
+                  styles.progressBar,
+                  {
+                    width: `${completionPercent}%`,
+                    backgroundColor: getCompletionColor(completionPercent)
+                  }
+                ]}
+              />
+            </View>
           </View>
         )}
-      </View>
-    </Pressable>
-  )};
+
+        <View style={styles.topicFooter}>
+          <View style={styles.topicMeta}>
+            <Ionicons name="time-outline" size={14} color={THEME.colors.text.secondary} />
+            <Text style={styles.metaText}>
+              {formatTimeSpent(timeSpentSeconds)}
+            </Text>
+          </View>
+          {topic.content && (
+            <View style={styles.topicMeta}>
+              <Ionicons name="document-text-outline" size={14} color={THEME.colors.text.secondary} />
+              <Text style={styles.metaText}>Has content</Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
+    )
+  };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={THEME.colors.primary} />
           <Text style={styles.loadingText}>Loading topics...</Text>
         </View>
       </SafeAreaView>
@@ -190,9 +193,9 @@ export default function TopicScreen() {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+          <Ionicons name="alert-circle-outline" size={48} color={THEME.colors.primary} />
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <Pressable style={styles.retryButton} onPress={loadTopics}>
@@ -204,21 +207,21 @@ export default function TopicScreen() {
   }
 
   const completedTopics = topics.filter(t => t.is_completed).length;
-  const overallProgress = topics.length > 0 
+  const overallProgress = topics.length > 0
     ? Math.round(topics.reduce((acc, t) => acc + Number(t.completion_percent), 0) / topics.length)
     : 0;
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
+      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+
       {/* Header */}
       <View style={styles.header}>
-        <Pressable 
+        <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{chapter?.title || chapterTitle}</Text>
@@ -232,7 +235,7 @@ export default function TopicScreen() {
       <View style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
           <View style={styles.summaryIconContainer}>
-            <Ionicons name="library" size={24} color="#2563eb" />
+            <Ionicons name="library" size={24} color={THEME.colors.primary} />
           </View>
           <View style={styles.summaryInfo}>
             <Text style={styles.summaryTitle}>Chapter Progress</Text>
@@ -242,16 +245,16 @@ export default function TopicScreen() {
           </View>
           <Text style={styles.overallProgress}>{overallProgress}%</Text>
         </View>
-        
+
         <View style={styles.progressBarContainer}>
-          <View 
+          <View
             style={[
               styles.progressBar,
-              { 
+              {
                 width: `${(completedTopics / topics.length) * 100}%`,
                 backgroundColor: getCompletionColor((completedTopics / topics.length) * 100)
               }
-            ]} 
+            ]}
           />
         </View>
 
@@ -265,7 +268,7 @@ export default function TopicScreen() {
             <Text style={styles.statLabel}>Completed</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: '#6B7280' }]}>
+            <Text style={[styles.statNumber, { color: THEME.colors.text.secondary }]}>
               {topics.length - completedTopics}
             </Text>
             <Text style={styles.statLabel}>Remaining</Text>
@@ -274,7 +277,7 @@ export default function TopicScreen() {
       </View>
 
       {/* Topics List */}
-      <ScrollView 
+      <ScrollView
         style={styles.topicsContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -298,7 +301,7 @@ export default function TopicScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: THEME.colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -309,7 +312,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   errorContainer: {
     flex: 1,
@@ -320,18 +323,18 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#EF4444',
+    color: THEME.colors.primary,
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 16,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -345,10 +348,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
+    paddingBottom: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: THEME.colors.border,
   },
   backButton: {
     marginRight: 16,
@@ -359,11 +363,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#111827',
+    color: THEME.colors.text.primary,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginTop: 2,
   },
   summaryCard: {
@@ -386,7 +390,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FEF2F2', // Light red
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -397,21 +401,21 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: THEME.colors.text.primary,
   },
   summarySubtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginTop: 2,
   },
   overallProgress: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#2563eb',
+    color: THEME.colors.primary,
   },
   progressBarContainer: {
     height: 8,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#f3f4f6',
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 16,
@@ -431,11 +435,11 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#2563eb',
+    color: THEME.colors.primary,
   },
   statLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginTop: 4,
   },
   topicsContainer: {
@@ -445,7 +449,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: THEME.colors.text.primary,
     marginBottom: 16,
   },
   topicCard: {
@@ -478,7 +482,7 @@ const styles = StyleSheet.create({
   topicTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: THEME.colors.text.primary,
     marginBottom: 2,
   },
   completedTopicTitle: {
@@ -486,7 +490,7 @@ const styles = StyleSheet.create({
   },
   topicNumber: {
     fontSize: 14,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   topicActions: {
     flexDirection: 'row',
@@ -515,7 +519,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
   },
   completionPercentage: {
     fontSize: 14,
@@ -531,7 +535,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginLeft: 4,
   },
   emptyState: {
@@ -541,13 +545,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#6B7280',
+    color: THEME.colors.text.secondary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyMessage: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: THEME.colors.text.secondary,
     textAlign: 'center',
     lineHeight: 20,
   },
