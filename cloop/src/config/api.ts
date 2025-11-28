@@ -10,11 +10,23 @@ import Constants from 'expo-constants';
  * 2. Or update the production return value below
  */
 export const getApiBaseUrl = (): string => {
-  // In development, always use localhost since you're using web browser
-  // Use environment variable if provided, otherwise default to the
-  // public EC2 IP where the backend will be deployed.
-  // Replace with your domain or different IP if needed.
-  return process.env.EXPO_PUBLIC_API_URL || 'http://51.21.143.32:4000';
+  // Priority: Expo config `extra` (available in production builds),
+  // then process.env (works in Expo Go/dev), then hardcoded default.
+  const extraUrl = (Constants.expoConfig && (Constants.expoConfig as any).extra && (Constants.expoConfig as any).extra.EXPO_PUBLIC_API_URL) ||
+    (Constants.manifest && (Constants.manifest as any).extra && (Constants.manifest as any).extra.EXPO_PUBLIC_API_URL);
+
+  const envUrl = process.env?.EXPO_PUBLIC_API_URL;
+
+  const resolved = extraUrl || envUrl || 'https://api.cloopapp.com';
+  if (!__DEV__) {
+    // minimal runtime logging so we can see the resolved base URL in release logs
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[getApiBaseUrl] resolved:', resolved);
+    } catch (e) {}
+  }
+
+  return resolved;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

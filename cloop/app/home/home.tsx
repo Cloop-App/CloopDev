@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, Image, StatusBar, ScrollView, SafeAreaView, Modal, Platform } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, Image, StatusBar, ScrollView, SafeAreaView, Modal, Platform, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,15 +17,42 @@ export default function HomeScreen() {
     loading,
     error,
     isProfileComplete,
-    missingFields
+
+    missingFields,
+    refetch: refetchProfile
   } = useUserProfile();
   const {
     chatHistory,
     loading: chatHistoryLoading,
-    error: chatHistoryError
+    error: chatHistoryError,
+    refetch: refetchChatHistory
   } = useChatHistory();
   const [showSidebar, setShowSidebar] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [chatHistoryRefreshing, setChatHistoryRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetchProfile();
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchProfile]);
+
+  const onRefreshChatHistory = useCallback(async () => {
+    setChatHistoryRefreshing(true);
+    try {
+      await refetchChatHistory();
+    } catch (error) {
+      console.error('Error refreshing chat history:', error);
+    } finally {
+      setChatHistoryRefreshing(false);
+    }
+  }, [refetchChatHistory]);
 
   useEffect(() => {
     // Set mounted flag after component is mounted
@@ -122,7 +149,17 @@ export default function HomeScreen() {
               <Ionicons name="close" size={24} color={THEME.colors.text.secondary} />
             </Pressable>
           </View>
-          <ScrollView style={styles.sidebarContent}>
+          <ScrollView
+            style={styles.sidebarContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={chatHistoryRefreshing}
+                onRefresh={onRefreshChatHistory}
+                colors={[THEME.colors.primary]}
+                tintColor={THEME.colors.primary}
+              />
+            }
+          >
             {chatHistoryLoading ? (
               <Text style={styles.loadingText}>Loading chat history...</Text>
             ) : chatHistoryError ? (
@@ -228,7 +265,18 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[THEME.colors.primary]}
+            tintColor={THEME.colors.primary}
+          />
+        }
+      >
         {/* Board Information Card */}
         <View style={styles.boardCard}>
           <View style={styles.cardHeader}>

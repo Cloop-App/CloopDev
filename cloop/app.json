@@ -22,7 +22,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.vivek1387.cloop"
+      "package": "com.vivek1387.cloop",
+      "versionCode": 1
     },
     "web": {
       "output": "static",
@@ -42,7 +43,15 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
