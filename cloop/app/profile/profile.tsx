@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet, ActivityIndicator, Image, ScrollView, Pressable, Modal, Alert } from 'react-native'
+import { View, Text, StyleSheet, ActivityIndicator, Image, ScrollView, Pressable, Modal, Alert, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import { fetchUserProfile, UserProfile } from '../../src/client/profile/fetch-profile'
 import { useAuth } from '../../src/context/AuthContext'
 import { Ionicons } from '@expo/vector-icons'
 import { fetchAllSubjects, addUserSubject, removeUserSubject, getAvailableSubjects, Subject, UserSubjectResponse } from '../../src/client/profile/subjects'
 import { THEME } from '../../src/constants/theme'
+import { BottomNavigation } from '../../components/navigation/BottomNavigation'
 
 export default function ProfileScreen() {
 	const router = useRouter()
@@ -17,6 +18,23 @@ export default function ProfileScreen() {
 	const [availableSubjects, setAvailableSubjects] = useState<Subject[]>([])
 	const [loadingSubjects, setLoadingSubjects] = useState(false)
 	const [actionLoading, setActionLoading] = useState<number | null>(null)
+
+	const handleTabPress = (tabId: string) => {
+		switch (tabId) {
+			case 'home':
+				router.push('/home/home')
+				break
+			case 'session':
+				router.push('/chapter-topic/session' as any)
+				break
+			case 'statistics':
+				router.push('/metrices/home' as any)
+				break
+			case 'profile':
+				// Already here
+				break
+		}
+	}
 
 	// Dedicated logout handler
 	const handleLogout = async () => {
@@ -107,7 +125,7 @@ export default function ProfileScreen() {
 
 		setLoadingSubjects(true)
 		try {
-			const available = await getAvailableSubjects(profile.user_subjects, {
+			const available = await getAvailableSubjects(profile.user_subjects as any, {
 				token: token || undefined
 			})
 			setAvailableSubjects(available)
@@ -221,133 +239,139 @@ export default function ProfileScreen() {
 
 	return (
 		<View style={styles.container}>
-			{/* Header with back and logout buttons */}
-			<View style={styles.topHeader}>
+			{/* Header */}
+			<View style={styles.header}>
 				<Pressable
-					style={styles.headerButton}
+					style={styles.backButton}
 					onPress={() => router.back()}
 				>
-					<Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+					<Ionicons name="arrow-back" size={24} color="#FFFFFF" />
 				</Pressable>
-				<Text style={styles.headerTitle}>Profile</Text>
-				<Pressable
-					style={styles.logoutButton}
-					onPress={() => {
-						Alert.alert(
-							'Logout',
-							'Are you sure you want to logout?',
-							[
-								{ text: 'Cancel', style: 'cancel' },
-								{
-									text: 'Logout',
-									style: 'destructive',
-									onPress: async () => {
-										try {
-											await logout()
-											router.replace('/login-sigup/login')
-										} catch (error) {
-											console.error('Header logout error:', error)
-											// Force logout even if there's an error
-											router.replace('/login-sigup/login')
-										}
-									}
-								}
-							]
-						)
-					}}
-				>
-					<Ionicons name="log-out-outline" size={24} color={THEME.colors.primary} />
+				<Text style={styles.headerTitle}>My Profile</Text>
+				<Pressable style={styles.menuButton} onPress={() => router.push('/notifications/notifications' as any)}>
+					<Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
 				</Pressable>
 			</View>
 
-			<ScrollView style={styles.scrollContainer} contentContainerStyle={styles.content}>
-				<View style={styles.profileHeader}>
-					<Image source={avatarSource} style={styles.avatar} />
-					<View style={styles.headerText}>
-						<Text style={styles.name}>{profile.name}</Text>
-						<Text style={styles.email}>{profile.email}</Text>
+			<ScrollView
+				style={styles.scrollContainer}
+				contentContainerStyle={styles.scrollContent}
+				showsVerticalScrollIndicator={false}
+			>
+				{/* Profile Info Card */}
+				<View style={styles.profileCard}>
+					<View style={styles.avatarContainer}>
+						<Image source={avatarSource} style={styles.avatar} />
+						<View style={styles.editBadge}>
+							<Ionicons name="camera" size={12} color="#FFFFFF" />
+						</View>
 					</View>
+					<Text style={styles.userName}>{profile.name} <Ionicons name="pencil" size={16} color="#9CA3AF" /></Text>
+					<Text style={styles.userInfo}>Class {profile.grade_level || '5'} | {profile.board || 'CBSE'}</Text>
 				</View>
 
-				<View style={styles.cardRow}>
-					<View style={styles.statCard}>
-						<Text style={styles.statNumber}>{profile.num_chats ?? 0}</Text>
-						<Text style={styles.statLabel}>Chats</Text>
-					</View>
-					<View style={styles.statCard}>
-						<Text style={styles.statNumber}>{profile.num_lessons ?? 0}</Text>
-						<Text style={styles.statLabel}>Lessons</Text>
-					</View>
-				</View>
-
+				{/* General Settings Section */}
 				<View style={styles.section}>
-					<Text style={styles.sectionTitle}>About</Text>
-					<Text style={styles.sectionText}>Grade: {profile.grade_level || '—'}</Text>
-					<Text style={styles.sectionText}>Board: {profile.board || '—'}</Text>
-					<Text style={styles.sectionText}>Preferred language: {profile.preferred_language || '—'}</Text>
-					<Text style={styles.sectionText}>Study goal: {profile.study_goal || '—'}</Text>
-				</View>
+					<Text style={styles.sectionHeader}>Settings</Text>
 
-				<View style={styles.section}>
-					<View style={styles.sectionHeader}>
-						<Text style={styles.sectionTitle}>Your Subjects</Text>
-						<Pressable
-							style={styles.addButton}
-							onPress={() => {
-								setShowAddSubject(true)
-								loadAvailableSubjects()
-							}}
-						>
-							<Ionicons name="add" size={20} color="#fff" />
-							<Text style={styles.addButtonText}>Add Subject</Text>
-						</Pressable>
-					</View>
-
-					{/* Current Subjects */}
-					<View style={styles.subjectsContainer}>
-						{profile.user_subjects && profile.user_subjects.length > 0 ? (
-							profile.user_subjects.map((userSubject, i) => (
-								<View key={i} style={styles.subjectCard}>
-									<View style={styles.subjectInfo}>
-										<Text style={styles.subjectName}>{userSubject.subject.name}</Text>
-										<Text style={styles.subjectProgress}>
-											{userSubject.completed_chapters}/{userSubject.total_chapters} chapters • {userSubject.completion_percent}% complete
-										</Text>
-									</View>
-									<Pressable
-										style={styles.removeButton}
-										onPress={() => handleRemoveSubject(userSubject.subject_id, userSubject.subject.name)}
-										disabled={actionLoading === userSubject.subject_id}
-									>
-										{actionLoading === userSubject.subject_id ? (
-											<ActivityIndicator size="small" color={THEME.colors.primary} />
-										) : (
-											<Ionicons name="remove-circle" size={24} color={THEME.colors.primary} />
-										)}
-									</Pressable>
-								</View>
-							))
-						) : profile.subjects && profile.subjects.length > 0 ? (
-							// Fallback to old subjects array
-							profile.subjects.map((s, i) => (
-								<View key={i} style={styles.tag}>
-									<Text style={styles.tagText}>{s}</Text>
-								</View>
-							))
-						) : (
-							<Text style={styles.noSubjectsText}>No subjects selected yet</Text>
-						)}
-					</View>
-				</View>
-
-				<View style={styles.sectionFooter}>
-					<Pressable style={styles.editButton} onPress={() => { /* navigate to edit screen if exists */ }}>
-						<Ionicons name="create-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-						<Text style={styles.editButtonText}>Edit Profile</Text>
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#F3E8FF' }]}>
+								<Ionicons name="notifications-outline" size={20} color="#8B5CF6" />
+							</View>
+							<Text style={styles.menuItemText}>Learning Reminder</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
 					</Pressable>
 
 					<Pressable
-						style={styles.logoutButtonMain}
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+						onPress={() => router.push('/metrices/home' as any)}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#F3E8FF' }]}>
+								<Ionicons name="trophy-outline" size={20} color="#8B5CF6" />
+							</View>
+							<Text style={styles.menuItemText}>Achievements</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+					</Pressable>
+
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+						onPress={() => router.push('/chapter-topic/session' as any)}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#F3E8FF' }]}>
+								<Ionicons name="bookmark-outline" size={20} color="#8B5CF6" />
+							</View>
+							<Text style={styles.menuItemText}>Saved Topics</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+					</Pressable>
+
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#F3E8FF' }]}>
+								<Ionicons name="settings-outline" size={20} color="#8B5CF6" />
+							</View>
+							<Text style={styles.menuItemText}>Preferences</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+					</Pressable>
+				</View>
+
+				{/* Security & Privacy Section */}
+				<View style={styles.section}>
+					<Text style={styles.sectionHeader}>Security & Privacy</Text>
+
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#E0F2FE' }]}>
+								<Ionicons name="shield-checkmark-outline" size={20} color="#0EA5E9" />
+							</View>
+							<Text style={styles.menuItemText}>Security</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+					</Pressable>
+
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#E0F2FE' }]}>
+								<Ionicons name="help-circle-outline" size={20} color="#0EA5E9" />
+							</View>
+							<Text style={styles.menuItemText}>Help Center</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+					</Pressable>
+
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#E0F2FE' }]}>
+								<Ionicons name="information-circle-outline" size={20} color="#0EA5E9" />
+							</View>
+							<Text style={styles.menuItemText}>About Us</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+					</Pressable>
+				</View>
+
+				{/* Log Out Section */}
+				<View style={styles.section}>
+					<Text style={styles.sectionHeader}>Account</Text>
+
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
 						onPress={() => {
 							Alert.alert(
 								'Logout',
@@ -362,8 +386,7 @@ export default function ProfileScreen() {
 												await logout()
 												router.replace('/login-sigup/login')
 											} catch (error) {
-												console.error('Main logout error:', error)
-												// Force logout even if there's an error
+												console.error('Logout error:', error)
 												router.replace('/login-sigup/login')
 											}
 										}
@@ -372,64 +395,33 @@ export default function ProfileScreen() {
 							)
 						}}
 					>
-						<Ionicons name="log-out-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
-						<Text style={styles.logoutButtonMainText}>Logout</Text>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#FEE2E2' }]}>
+								<Ionicons name="log-out-outline" size={20} color="#EF4444" />
+							</View>
+							<Text style={[styles.menuItemText, { color: '#EF4444' }]}>Log out</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#Ef4444" />
 					</Pressable>
 
-					<Text style={styles.footerText}>Member since {new Date(profile.created_at).toDateString()}</Text>
+					<Pressable
+						style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+					>
+						<View style={styles.menuItemLeft}>
+							<View style={[styles.iconContainer, { backgroundColor: '#FEE2E2' }]}>
+								<Ionicons name="trash-outline" size={20} color="#EF4444" />
+							</View>
+							<Text style={[styles.menuItemText, { color: '#EF4444' }]}>Delete Account</Text>
+						</View>
+						<Ionicons name="chevron-forward" size={20} color="#EF4444" />
+					</Pressable>
 				</View>
 			</ScrollView>
 
-			{/* Add Subject Modal */}
-			<Modal
-				visible={showAddSubject}
-				animationType="slide"
-				transparent={true}
-				onRequestClose={() => setShowAddSubject(false)}
-			>
-				<View style={styles.modalOverlay}>
-					<View style={styles.modalContent}>
-						<View style={styles.modalHeader}>
-							<Text style={styles.modalTitle}>Add New Subject</Text>
-							<Pressable onPress={() => setShowAddSubject(false)}>
-								<Ionicons name="close" size={24} color={THEME.colors.text.secondary} />
-							</Pressable>
-						</View>
-
-						<ScrollView style={styles.modalScroll}>
-							{loadingSubjects ? (
-								<View style={styles.modalLoading}>
-									<ActivityIndicator size="large" color={THEME.colors.primary} />
-									<Text style={styles.modalLoadingText}>Loading available subjects...</Text>
-								</View>
-							) : availableSubjects.length > 0 ? (
-								availableSubjects.map((subject) => (
-									<Pressable
-										key={subject.id}
-										style={styles.subjectOption}
-										onPress={() => handleAddSubject(subject.id)}
-										disabled={actionLoading === subject.id}
-									>
-										<View style={styles.subjectOptionInfo}>
-											<Text style={styles.subjectOptionName}>{subject.name}</Text>
-											{subject.category && (
-												<Text style={styles.subjectOptionCategory}>{subject.category}</Text>
-											)}
-										</View>
-										{actionLoading === subject.id ? (
-											<ActivityIndicator size="small" color={THEME.colors.primary} />
-										) : (
-											<Ionicons name="add-circle" size={24} color={THEME.colors.secondary} />
-										)}
-									</Pressable>
-								))
-							) : (
-								<Text style={styles.noAvailableSubjects}>All available subjects have been added to your profile!</Text>
-							)}
-						</ScrollView>
-					</View>
-				</View>
-			</Modal>
+			<BottomNavigation
+				activeTab="profile"
+				onTabPress={handleTabPress}
+			/>
 		</View>
 	)
 }
@@ -437,334 +429,169 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: THEME.colors.background,
+		backgroundColor: '#F8FAFC',
 	},
-	topHeader: {
+	header: {
+		backgroundColor: '#8B5CF6',
+		paddingTop: Platform.OS === 'android' ? 40 : 50,
+		paddingHorizontal: 20,
+		paddingBottom: 24,
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-		paddingHorizontal: 20,
-		paddingTop: 60,
-		paddingBottom: 20,
-		backgroundColor: THEME.colors.background,
-		borderBottomWidth: 1,
-		borderBottomColor: THEME.colors.border,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 4,
-		elevation: 2,
+		borderBottomLeftRadius: 24,
+		borderBottomRightRadius: 24,
+		shadowColor: '#8B5CF6',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.2,
+		shadowRadius: 8,
+		elevation: 8,
+		zIndex: 10,
 	},
-	headerButton: {
-		padding: 8,
-		borderRadius: 8,
-		backgroundColor: '#f3f4f6',
+	backButton: {
+		width: 40,
+		height: 40,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderRadius: 20,
+		backgroundColor: 'rgba(255,255,255,0.2)',
 	},
 	headerTitle: {
-		fontSize: 20,
-		fontWeight: '700',
-		color: THEME.colors.text.primary,
+		fontSize: 18,
+		fontWeight: '600',
+		color: '#FFFFFF',
+		flex: 1,
+		textAlign: 'center',
+		marginRight: 40,
 	},
-	logoutButton: {
-		padding: 8,
-		borderRadius: 8,
-		backgroundColor: '#fef2f2',
+	menuButton: {
+		width: 40,
+		height: 40,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderRadius: 20,
+		backgroundColor: 'rgba(255,255,255,0.2)',
 	},
 	scrollContainer: {
 		flex: 1,
 	},
-	content: {
-		padding: 20,
-		paddingBottom: 40,
+	scrollContent: {
+		paddingBottom: 120, // Space for Bottom Navigation
+	},
+	profileCard: {
+		backgroundColor: '#FFFFFF',
+		alignItems: 'center',
+		paddingVertical: 24,
+		marginHorizontal: 20,
+		marginTop: 20,
+		marginBottom: 20,
+		borderRadius: 24,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.05,
+		shadowRadius: 10,
+		elevation: 4,
+	},
+	avatarContainer: {
+		position: 'relative',
+		marginBottom: 16,
+	},
+	avatar: {
+		width: 90,
+		height: 90,
+		borderRadius: 45,
+		borderWidth: 4,
+		borderColor: '#F3E8FF',
+	},
+	editBadge: {
+		position: 'absolute',
+		bottom: 0,
+		right: 0,
+		backgroundColor: '#8B5CF6',
+		width: 28,
+		height: 28,
+		borderRadius: 14,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderWidth: 2,
+		borderColor: '#FFFFFF',
+	},
+	userName: {
+		fontSize: 20,
+		fontWeight: '700',
+		color: '#1F2937',
+		marginBottom: 6,
+		flexDirection: 'row',
+		alignItems: 'center',
+	},
+	userInfo: {
+		fontSize: 14,
+		color: '#6B7280',
+		backgroundColor: '#F3F4F6',
+		paddingHorizontal: 12,
+		paddingVertical: 4,
+		borderRadius: 12,
+		overflow: 'hidden',
+	},
+	section: {
+		backgroundColor: '#FFFFFF',
+		marginHorizontal: 20,
+		marginBottom: 16,
+		borderRadius: 20,
+		padding: 16,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 1 },
+		shadowOpacity: 0.03,
+		shadowRadius: 6,
+		elevation: 2,
+	},
+	sectionHeader: {
+		fontSize: 13,
+		fontWeight: '700',
+		color: '#9CA3AF',
+		marginBottom: 16,
+		textTransform: 'uppercase',
+		letterSpacing: 0.5,
+		marginLeft: 4,
+	},
+	menuItem: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingVertical: 12,
+		paddingHorizontal: 8,
+		borderRadius: 12,
+		marginBottom: 4,
+	},
+	menuItemPressed: {
+		backgroundColor: '#F9FAFB',
+	},
+	menuItemLeft: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		flex: 1,
+	},
+	iconContainer: {
+		width: 36,
+		height: 36,
+		borderRadius: 10,
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginRight: 14,
+	},
+	menuItemText: {
+		fontSize: 15,
+		fontWeight: '500',
+		color: '#1F2937',
 	},
 	center: {
 		justifyContent: 'center',
 		alignItems: 'center',
-	},
-	profileHeader: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		marginBottom: 24,
-		backgroundColor: '#ffffff',
-		padding: 20,
-		borderRadius: 16,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 8,
-		elevation: 3,
-	},
-	avatar: {
-		width: 100,
-		height: 100,
-		borderRadius: 50,
-		backgroundColor: '#f3f4f6',
-		borderWidth: 4,
-		borderColor: '#ffffff',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.1,
-		shadowRadius: 12,
-		elevation: 4,
-	},
-	headerText: {
-		marginLeft: 14,
-	},
-	name: {
-		fontSize: 20,
-		fontWeight: '700',
-		color: THEME.colors.text.primary,
-	},
-	email: {
-		fontSize: 14,
-		color: THEME.colors.text.secondary,
-		marginTop: 4,
-	},
-	cardRow: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		marginBottom: 24,
-		gap: 12,
-	},
-	statCard: {
-		flex: 1,
-		backgroundColor: '#ffffff',
-		padding: 20,
-		borderRadius: 16,
-		alignItems: 'center',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 8,
-		elevation: 3,
-	},
-	statNumber: {
-		fontSize: 18,
-		fontWeight: '700',
-		color: THEME.colors.text.primary,
-	},
-	statLabel: {
-		fontSize: 12,
-		color: THEME.colors.text.secondary,
-		marginTop: 4,
-	},
-	section: {
-		backgroundColor: '#ffffff',
-		padding: 20,
-		borderRadius: 16,
-		marginBottom: 16,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 8,
-		elevation: 3,
-	},
-	sectionTitle: {
-		fontSize: 16,
-		fontWeight: '600',
-		color: THEME.colors.text.primary,
-		marginBottom: 8,
-	},
-	sectionText: {
-		fontSize: 14,
-		color: THEME.colors.text.primary,
-		marginBottom: 4,
-	},
-	tagsContainer: {
-		flexDirection: 'row',
-		flexWrap: 'wrap',
-		gap: 8,
-	},
-	tag: {
-		backgroundColor: '#f3f4f6',
-		paddingVertical: 6,
-		paddingHorizontal: 10,
-		borderRadius: 999,
-		marginRight: 8,
-		marginBottom: 8,
-	},
-	tagText: {
-		color: THEME.colors.text.primary,
-		fontSize: 13,
-	},
-	editButton: {
-		backgroundColor: THEME.colors.primary,
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'center',
-		paddingVertical: 14,
-		paddingHorizontal: 20,
-		borderRadius: 12,
-		shadowColor: THEME.colors.primary,
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.3,
-		shadowRadius: 8,
-		elevation: 4,
-	},
-	editButtonText: {
-		color: '#fff',
-		fontWeight: '600',
-		fontSize: 16,
-	},
-	sectionFooter: {
-		marginTop: 18,
-		gap: 12,
-	},
-	footerText: {
-		marginTop: 10,
-		color: THEME.colors.text.secondary,
-		fontSize: 13,
-		textAlign: 'center',
 	},
 	errorText: {
 		color: THEME.colors.primary,
 	},
 	subtle: {
 		color: THEME.colors.text.secondary,
-	},
-	sectionHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		marginBottom: 8,
-	},
-	addButton: {
-		backgroundColor: THEME.colors.primary,
-		flexDirection: 'row',
-		alignItems: 'center',
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 6,
-	},
-	addButtonText: {
-		color: '#fff',
-		fontSize: 12,
-		fontWeight: '600',
-		marginLeft: 4,
-	},
-	subjectsContainer: {
-		gap: 8,
-	},
-	subjectCard: {
-		backgroundColor: '#f8fafc',
-		padding: 16,
-		borderRadius: 12,
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		borderWidth: 1,
-		borderColor: THEME.colors.border,
-	},
-	subjectInfo: {
-		flex: 1,
-	},
-	subjectName: {
-		fontSize: 14,
-		fontWeight: '600',
-		color: THEME.colors.text.primary,
-	},
-	subjectProgress: {
-		fontSize: 12,
-		color: THEME.colors.text.secondary,
-		marginTop: 2,
-	},
-	removeButton: {
-		padding: 4,
-	},
-	noSubjectsText: {
-		fontSize: 14,
-		color: THEME.colors.text.secondary,
-		fontStyle: 'italic',
-		textAlign: 'center',
-		marginTop: 8,
-	},
-	modalOverlay: {
-		flex: 1,
-		backgroundColor: 'rgba(0,0,0,0.5)',
-		justifyContent: 'center',
-		alignItems: 'center',
-	},
-	modalContent: {
-		backgroundColor: '#fff',
-		borderRadius: 20,
-		width: '90%',
-		maxHeight: '80%',
-		padding: 0,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 10 },
-		shadowOpacity: 0.25,
-		shadowRadius: 20,
-		elevation: 10,
-	},
-	modalHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		padding: 20,
-		borderBottomWidth: 1,
-		borderBottomColor: THEME.colors.border,
-	},
-	modalTitle: {
-		fontSize: 18,
-		fontWeight: '600',
-		color: THEME.colors.text.primary,
-	},
-	modalScroll: {
-		maxHeight: 400,
-	},
-	modalLoading: {
-		padding: 40,
-		alignItems: 'center',
-	},
-	modalLoadingText: {
-		marginTop: 12,
-		color: THEME.colors.text.secondary,
-	},
-	subjectOption: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		padding: 16,
-		borderBottomWidth: 1,
-		borderBottomColor: '#f3f4f6',
-	},
-	subjectOptionInfo: {
-		flex: 1,
-	},
-	subjectOptionName: {
-		fontSize: 16,
-		fontWeight: '500',
-		color: THEME.colors.text.primary,
-	},
-	subjectOptionCategory: {
-		fontSize: 12,
-		color: THEME.colors.text.secondary,
-		marginTop: 2,
-	},
-	noAvailableSubjects: {
-		padding: 40,
-		textAlign: 'center',
-		color: THEME.colors.text.secondary,
-		fontSize: 14,
-	},
-	logoutButtonMain: {
-		backgroundColor: THEME.colors.primary,
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'center',
-		paddingVertical: 14,
-		paddingHorizontal: 20,
-		borderRadius: 12,
-		marginTop: 8,
-		shadowColor: THEME.colors.primary,
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.3,
-		shadowRadius: 8,
-		elevation: 4,
-	},
-	logoutButtonMainText: {
-		color: '#fff',
-		fontWeight: '600',
-		fontSize: 16,
 	},
 })

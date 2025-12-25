@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,13 @@ import {
   Alert,
   Platform
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { fetchChapters, Chapter, Subject } from '../../src/client/chapters/chapters';
 import { THEME } from '../../src/constants/theme';
+import { SubjectIcon } from '../../components/common/SubjectIcon';
+import { BottomNavigation } from '../../components/navigation/BottomNavigation';
 
 export default function ChapterScreen() {
   const router = useRouter();
@@ -30,33 +32,38 @@ export default function ChapterScreen() {
   const [subject, setSubject] = useState<Subject | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('home');
 
-  useEffect(() => {
-    console.log('[ChapterScreen] useEffect triggered', { subjectId, authLoading, hasUser: !!user, hasToken: !!token });
 
-    // Wait for auth initialization
-    if (authLoading) {
-      console.log('[ChapterScreen] Waiting for auth loading...');
-      return;
-    }
 
-    if (!subjectId) {
-      console.error('[ChapterScreen] Missing subjectId');
-      setError('Invalid subject parameters');
-      setLoading(false);
-      return;
-    }
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[ChapterScreen] useFocusEffect triggered', { subjectId, authLoading, hasUser: !!user, hasToken: !!token });
 
-    if (!user || !token) {
-      console.error('[ChapterScreen] Missing user or token', { user: !!user, token: !!token });
-      setError('Authentication required');
-      setLoading(false);
-      return;
-    }
+      // Wait for auth initialization
+      if (authLoading) {
+        console.log('[ChapterScreen] Waiting for auth loading...');
+        return;
+      }
 
-    console.log('[ChapterScreen] All checks passed, calling loadChapters');
-    loadChapters();
-  }, [subjectId, user, token, authLoading]);
+      if (!subjectId) {
+        console.error('[ChapterScreen] Missing subjectId');
+        setError('Invalid subject parameters');
+        setLoading(false);
+        return;
+      }
+
+      if (!user || !token) {
+        console.error('[ChapterScreen] Missing user or token', { user: !!user, token: !!token });
+        setError('Authentication required');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[ChapterScreen] All checks passed, calling loadChapters');
+      loadChapters();
+    }, [subjectId, user, token, authLoading])
+  );
 
   const loadChapters = async () => {
     console.log('[ChapterScreen] loadChapters started');
@@ -109,11 +116,7 @@ export default function ChapterScreen() {
     >
       <View style={styles.chapterHeader}>
         <View style={styles.chapterIconContainer}>
-          <Ionicons
-            name="book-outline"
-            size={24}
-            color={THEME.colors.primary}
-          />
+          <SubjectIcon subject={subject?.name || subjectName} size={40} />
         </View>
         <View style={styles.chapterInfo}>
           <Text style={styles.chapterTitle}>{chapter.title}</Text>
@@ -173,35 +176,35 @@ export default function ChapterScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={THEME.colors.primary} />
+          <ActivityIndicator size="large" color="#8B5CF6" />
           <Text style={styles.loadingText}>Loading chapters...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color={THEME.colors.primary} />
+          <Ionicons name="alert-circle-outline" size={48} color="#8B5CF6" />
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <Pressable style={styles.retryButton} onPress={loadChapters}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -209,12 +212,13 @@ export default function ChapterScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{subject?.name || subjectName}</Text>
           <Text style={styles.headerSubtitle}>{chapters.length} Chapters Available</Text>
         </View>
+
       </View>
 
       {/* Subject Summary Card */}
@@ -259,15 +263,27 @@ export default function ChapterScreen() {
             </Text>
           </View>
         )}
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Bottom Navigation */}
+      <BottomNavigation
+        activeTab={activeTab}
+        onTabPress={(tabId) => {
+          setActiveTab(tabId);
+          if (tabId === 'home') router.push('/home/home' as any);
+          else if (tabId === 'statistics') router.push('/profile/metrics' as any);
+          else if (tabId === 'profile') router.push('/profile/profile' as any);
+        }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: '#F5F5F5',
   },
   loadingContainer: {
     flex: 1,
@@ -278,7 +294,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: THEME.colors.text.secondary,
+    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
@@ -289,18 +305,18 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: THEME.colors.primary,
+    color: '#8B5CF6',
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 16,
-    color: THEME.colors.text.secondary,
+    color: '#6B7280',
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: THEME.colors.primary,
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -311,17 +327,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   header: {
+    backgroundColor: '#8B5CF6',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 50,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
-    paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
   },
   backButton: {
-    marginRight: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   headerContent: {
     flex: 1,
@@ -329,21 +349,23 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: THEME.colors.text.primary,
+    color: '#FFFFFF',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: THEME.colors.text.secondary,
+    color: '#E9D5FF',
     marginTop: 2,
   },
   summaryCard: {
-    backgroundColor: '#fff',
-    margin: 20,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -358,7 +380,7 @@ const styles = StyleSheet.create({
   summaryNumber: {
     fontSize: 24,
     fontWeight: '700',
-    color: THEME.colors.primary,
+    color: '#8B5CF6',
   },
   summaryLabel: {
     fontSize: 12,
@@ -395,8 +417,6 @@ const styles = StyleSheet.create({
   chapterIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FEF2F2', // Light red
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -482,4 +502,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
+
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,15 @@ import {
   ActivityIndicator,
   Platform
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { fetchTopics, Topic, ChapterDetails } from '../../src/client/chapters/chapters';
 import { THEME } from '../../src/constants/theme';
+import { SubjectIcon } from '../../components/common/SubjectIcon';
+import { BottomNavigation } from '../../components/navigation/BottomNavigation';
+import { fetchSavedTopics, saveTopic, unsaveTopic } from '../../src/client/saved-topics/saved-topics-client';
+
 
 export default function TopicScreen() {
   const router = useRouter();
@@ -24,17 +28,35 @@ export default function TopicScreen() {
     subjectName: string;
   }>();
   const { user, token } = useAuth();
-
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [savedTopicIds, setSavedTopicIds] = useState<Set<number>>(new Set());
+
   const [chapter, setChapter] = useState<ChapterDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('home');
 
-  useEffect(() => {
-    if (chapterId && user && token) {
-      loadTopics();
+  useFocusEffect(
+    useCallback(() => {
+      if (chapterId && user && token) {
+        loadTopics();
+      }
+      if (user && user.user_id) {
+        loadSavedTopics();
+      }
+    }, [chapterId, user, token])
+  );
+
+  const loadSavedTopics = async () => {
+    if (!user?.user_id) return;
+    try {
+      const saved = await fetchSavedTopics(user.user_id, token || undefined);
+      setSavedTopicIds(new Set(saved.map(s => s.topic_id)));
+    } catch (err) {
+      console.error('Failed to load saved topics', err);
     }
-  }, [chapterId, user, token]);
+  };
+
 
   const loadTopics = async () => {
     try {
@@ -54,6 +76,34 @@ export default function TopicScreen() {
       console.error('Error loading topics:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleSave = async (topicId: number) => {
+    if (!user?.user_id) return;
+    const isSaved = savedTopicIds.has(topicId);
+
+    // Optimistic update
+    const newSaved = new Set(savedTopicIds);
+    if (isSaved) {
+      newSaved.delete(topicId);
+    } else {
+      newSaved.add(topicId);
+    }
+    setSavedTopicIds(newSaved);
+
+    try {
+      if (isSaved) {
+        await unsaveTopic(user.user_id, topicId, token || undefined);
+      } else {
+        await saveTopic(user.user_id, topicId, token || undefined);
+      }
+    } catch (err) {
+      // Revert on error
+      console.error('Failed to toggle save topic', err);
+      // Re-fetch to ensure sync
+      loadSavedTopics();
+      alert('Failed to update bookmark');
     }
   };
 
@@ -121,16 +171,30 @@ export default function TopicScreen() {
             <Text style={styles.topicNumber}>Topic {index + 1}</Text>
           </View>
           <View style={styles.topicActions}>
-            {topic.is_completed && (
-              <View style={styles.completedBadge}>
-                <Text style={styles.completedBadgeText}>Completed</Text>
-              </View>
-            )}
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={THEME.colors.text.secondary}
-            />
+            <Pressable
+              onPress={() => handleToggleSave(topic.id)}
+              style={{ padding: 8, marginRight: 4 }}
+            >
+              <Ionicons
+                name={savedTopicIds.has(topic.id) ? "bookmark" : "bookmark-outline"}
+                size={24}
+                color="#8B5CF6"
+              />
+            </Pressable>
+
+            {/* Play/Chevron Button */}
+            <Pressable
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#8B5CF6',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Ionicons name="play" size={16} color="#FFFFFF" />
+            </Pressable>
           </View>
         </View>
 
@@ -180,29 +244,29 @@ export default function TopicScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={THEME.colors.primary} />
+          <ActivityIndicator size="large" color="#8B5CF6" />
           <Text style={styles.loadingText}>Loading topics...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color={THEME.colors.primary} />
+          <Ionicons name="alert-circle-outline" size={48} color="#8B5CF6" />
           <Text style={styles.errorTitle}>Error</Text>
           <Text style={styles.errorMessage}>{error}</Text>
           <Pressable style={styles.retryButton} onPress={loadTopics}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -212,8 +276,8 @@ export default function TopicScreen() {
     : 0;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -221,7 +285,7 @@ export default function TopicScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>{chapter?.title || chapterTitle}</Text>
@@ -229,6 +293,7 @@ export default function TopicScreen() {
             {subjectName} • {topics.length} Topics
           </Text>
         </View>
+
       </View>
 
       {/* Chapter Summary Card */}
@@ -293,15 +358,27 @@ export default function TopicScreen() {
             </Text>
           </View>
         )}
+        <View style={{ height: 100 }} />
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Bottom Navigation */}
+      <BottomNavigation
+        activeTab={activeTab}
+        onTabPress={(tabId) => {
+          setActiveTab(tabId);
+          if (tabId === 'home') router.push('/home/home' as any);
+          else if (tabId === 'statistics') router.push('/profile/metrics' as any);
+          else if (tabId === 'profile') router.push('/profile/profile' as any);
+        }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: '#F5F5F5',
   },
   loadingContainer: {
     flex: 1,
@@ -312,7 +389,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: THEME.colors.text.secondary,
+    color: '#6B7280',
   },
   errorContainer: {
     flex: 1,
@@ -323,18 +400,18 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: THEME.colors.primary,
+    color: '#8B5CF6',
     marginTop: 16,
     marginBottom: 8,
   },
   errorMessage: {
     fontSize: 16,
-    color: THEME.colors.text.secondary,
+    color: '#6B7280',
     textAlign: 'center',
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: THEME.colors.primary,
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -345,17 +422,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   header: {
+    backgroundColor: '#8B5CF6',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 50,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 16,
-    paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
   },
   backButton: {
-    marginRight: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   headerContent: {
     flex: 1,
@@ -363,21 +444,23 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: THEME.colors.text.primary,
+    color: '#FFFFFF',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: THEME.colors.text.secondary,
+    color: '#E9D5FF',
     marginTop: 2,
   },
   summaryCard: {
-    backgroundColor: '#fff',
-    margin: 20,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 16,
+    borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -390,7 +473,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FEF2F2', // Light red
+    backgroundColor: '#E9D5FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -411,7 +494,7 @@ const styles = StyleSheet.create({
   overallProgress: {
     fontSize: 24,
     fontWeight: '700',
-    color: THEME.colors.primary,
+    color: '#8B5CF6',
   },
   progressBarContainer: {
     height: 8,
@@ -435,7 +518,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: '700',
-    color: THEME.colors.primary,
+    color: '#8B5CF6',
   },
   statLabel: {
     fontSize: 12,
@@ -555,4 +638,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+
 });

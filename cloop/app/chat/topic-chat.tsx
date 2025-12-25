@@ -15,6 +15,7 @@ import {
   Image
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAuthErrorHandler } from '../../src/hooks/useAuthErrorHandler';
@@ -22,6 +23,7 @@ import { API_BASE_URL } from '../../src/config/api';
 import { THEME } from '../../src/constants/theme';
 import MessageBubble from '../../components/chat/MessageBubble';
 import GoalsProgressBar from '../../components/chat/GoalsProgressBar';
+import TypingIndicator from '../../components/chat/TypingIndicator';
 import {
   fetchTopicChatMessages,
   sendTopicChatMessage,
@@ -29,6 +31,7 @@ import {
   TopicChatDetails,
   TopicGoal
 } from '../../src/client/topic-chat/topic-chat';
+import { useSpeechRecognition } from '../../src/hooks/useSpeechRecognition';
 
 const LOGO_IMG = require('../../assets/images/logo.png');
 
@@ -56,7 +59,43 @@ export default function TopicChatScreen() {
   const [initialTimeSpent, setInitialTimeSpent] = useState<number>(0); // Store initial time from DB
   const [currentSessionTime, setCurrentSessionTime] = useState<number>(0); // Track current session time
   const [elapsedTime, setElapsedTime] = useState<string>('0:00');
+
   const scrollViewRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
+
+  const {
+    isListening,
+    transcript,
+    startListening,
+    stopListening,
+    hasPermission,
+    requestPermission
+  } = useSpeechRecognition();
+
+  // Store text before speech to support appending
+  const [textBeforeSpeech, setTextBeforeSpeech] = useState('');
+
+  useEffect(() => {
+    if (transcript) {
+      setInputText(textBeforeSpeech + (textBeforeSpeech ? ' ' : '') + transcript);
+    }
+  }, [transcript]);
+
+  const handleMicPress = async () => {
+    if (isListening) {
+      await stopListening();
+    } else {
+      if (!hasPermission) {
+        const granted = await requestPermission();
+        if (!granted) {
+          Alert.alert('Permission Required', 'Microphone permission is needed for voice input.');
+          return;
+        }
+      }
+      setTextBeforeSpeech(inputText);
+      await startListening();
+    }
+  };
 
   useEffect(() => {
     if (topicId && user && token) {
@@ -69,7 +108,7 @@ export default function TopicChatScreen() {
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
-  }, [messages]);
+  }, [messages, sending]);
 
   useEffect(() => {
     // Update timer every second
@@ -120,6 +159,28 @@ export default function TopicChatScreen() {
     };
   }, [currentSessionTime, topicId, user, token]);
 
+  const simulateIncomingMessages = async (msgs: TopicChatMessage[]) => {
+    if (!msgs || msgs.length === 0) return;
+
+    for (const msg of msgs) {
+      setSending(true);
+      // Wait for a bit to simulate typing (1-2 seconds)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      setMessages(prev => {
+        // Avoid duplicates if weird race conditions happen
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      setSending(false);
+
+      // Small pause between messages
+      if (msgs.indexOf(msg) < msgs.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+  };
+
   const loadTopicChat = async () => {
     try {
       setLoading(true);
@@ -138,8 +199,24 @@ export default function TopicChatScreen() {
       setInitialTimeSpent(timeSpent);
       setSessionStartTime(new Date()); // Reset session start time
 
-      // If there are no messages but there's an initial greeting, add it
-      if (response.messages.length === 0 && response.initialGreeting) {
+      // Logic to determine if we should animate the "fresh" chat experience
+      // If messages < 3 and completion is low, treat as fresh to replay the greeting
+      const isFreshChat = response.messages.length <= 2 && (response.topic.completion_percent || 0) < 5;
+
+      if (isFreshChat && response.messages.length > 0) {
+        // Special case: It's a "fresh" chat but the server already has the greeting stored.
+        // We want to REPLAY it for the user to see the "Typing..." effect.
+        setMessages([]); // Start empty
+        setLoading(false); // Stop main spinner
+
+        // Replay existing messages
+        simulateIncomingMessages(response.messages);
+      }
+      else if (response.messages.length === 0 && response.initialGreeting && response.initialGreeting.length > 0) {
+        // Fresh start, no messages in DB yet, but we have initial greeting from server response
+        setMessages([]);
+        setLoading(false);
+
         const greetingMessages: TopicChatMessage[] = response.initialGreeting.map((msg, idx) => ({
           id: Date.now() + idx,
           sender: 'ai' as const,
@@ -148,12 +225,16 @@ export default function TopicChatScreen() {
           options: msg.options,
           created_at: new Date().toISOString()
         }));
-        setMessages(greetingMessages);
+
+        simulateIncomingMessages(greetingMessages);
       } else {
+        // Restore history immediately
         setMessages(response.messages);
+        setLoading(false);
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to load chat');
+      setLoading(false);
 
       // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
@@ -161,8 +242,6 @@ export default function TopicChatScreen() {
         setError(error.message);
         console.error('Error loading topic chat:', err);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -173,17 +252,18 @@ export default function TopicChatScreen() {
     setInputText('');
     setSending(true);
 
+    // Initial placeholder message
+    const userMessageId = Date.now();
+    const userMessage: TopicChatMessage = {
+      id: userMessageId,
+      message: textToSend,
+      sender: 'user',
+      created_at: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
     try {
-      // Add user message immediately for better UX
-      const userMessage: TopicChatMessage = {
-        id: Date.now(),
-        message: textToSend,
-        sender: 'user',
-        created_at: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, userMessage]);
-
       const response = await sendTopicChatMessage(
         parseInt(topicId!),
         {
@@ -196,11 +276,15 @@ export default function TopicChatScreen() {
         }
       );
 
-      // aiMessages may be returned as `aiMessages` (new) or `messages` (alias)
+      // AI messages from response
       const aiMsgs: TopicChatMessage[] = (response as any).messages || (response as any).aiMessages || [];
 
+      // Update goals if returned in response (to sync progress instantly)
+      if ((response as any).goals) {
+        setGoals((response as any).goals);
+      }
+
       // Add feedback to the feedback map for user message
-      // Capture into locals because TypeScript doesn't narrow across closures reliably
       const userCorrection = (response as any).userCorrection ?? null;
       const directFeedback = (response as any).feedback ?? null;
 
@@ -208,20 +292,35 @@ export default function TopicChatScreen() {
         setFeedbackMap(prev => {
           const newMap = new Map(prev);
           if (userCorrection) {
-            newMap.set(userMessage.id, {
+            newMap.set(userMessageId, { // Use original ID to map feedback
               ...userCorrection,
-              feedback: userCorrection.feedback // Ensure nested feedback is also passed
+              feedback: userCorrection.feedback
             });
           }
           if (directFeedback) {
-            newMap.set(userMessage.id, directFeedback);
+            newMap.set(userMessageId, directFeedback);
           }
           return newMap;
         });
       }
 
-      // Convert AI messages and add unique IDs
+      // 1. Handle the Core User Message Update ( Server Canonicalization )
+      // If the server returned a canonical userMessage, we replace our local one to apply any formatting/diffs
+      const serverUserMessage = (response as any).userMessage ?? null;
+
+
+
+      let messagesToInject: TopicChatMessage[] = [];
+
+      // Convert raw AI messages to proper objects
       const newAIMessages = aiMsgs.map(m => {
+        console.log('Debug: Processing AI message:', {
+          type: m.message_type,
+          hasSessionMetrics: !!m.session_metrics,
+          hasDiffHtml: !!m.diff_html,
+          message: m.message
+        });
+
         const msg: any = {
           ...m,
           id: Date.now() + Math.random(),
@@ -229,81 +328,93 @@ export default function TopicChatScreen() {
           created_at: new Date().toISOString()
         };
 
-        // If this is a session_summary message, parse metrics from diff_html
-        if (m.message_type === 'session_summary' && m.diff_html) {
+        // Priority 1: Direct session_metrics from backend (New format)
+        // Check both direct property and via accidental nesting or any cast
+        const rawMetrics = m.session_metrics || (m as any).session_metrics;
+
+        // Priority 2: Parse from diff_html if it looks like JSON strings
+        let parsedMetrics = null;
+        if (!rawMetrics && m.message_type === 'session_summary' && m.diff_html) {
           try {
-            msg.session_summary = JSON.parse(m.diff_html);
+            // Only try parse if it looks like an object
+            if (m.diff_html.trim().startsWith('{')) {
+              parsedMetrics = JSON.parse(m.diff_html);
+            }
           } catch (e) {
             console.error('Failed to parse session metrics from diff_html:', e);
           }
         }
 
+        if (rawMetrics) {
+          console.log('Debug: Using raw session_metrics');
+          msg.session_summary = rawMetrics;
+          msg.message_type = 'session_summary'; // Force type to render card
+        } else if (parsedMetrics) {
+          console.log('Debug: Using parsed metrics from diff_html');
+          msg.session_summary = parsedMetrics;
+          msg.message_type = 'session_summary';
+        }
+
+        // Fallback: If message text is "session_complete" but no type set, force it
+        if (msg.message === 'session_complete' && msg.message_type !== 'session_summary') {
+          msg.message_type = 'session_summary';
+        }
+
         return msg;
       });
 
-      // If the server returned a canonical userMessage (the admin_chat row), replace the
-      // local placeholder message with the server version so that fields like
-      // message_type and diff_html are preserved and the bubble renders as a diff.
-      const serverUserMessage = (response as any).userMessage ?? null;
-
-      // Build the new messages array by replacing the last local placeholder with the server one
-      if (serverUserMessage) {
-        const serverMsg: TopicChatMessage = {
-          id: serverUserMessage.id,
-          sender: 'user',
-          message: serverUserMessage.message || textToSend,
-          message_type: serverUserMessage.message_type || 'text',
-          options: serverUserMessage.options || [],
-          diff_html: serverUserMessage.diff_html || null,
-          emoji: serverUserMessage.emoji || undefined,
-          file_url: serverUserMessage.file_url || undefined,
-          file_type: serverUserMessage.file_type || undefined,
-          created_at: serverUserMessage.created_at || new Date().toISOString()
+      // Special case: Session Summary
+      if (response.session_summary) {
+        const summaryMessage: TopicChatMessage = {
+          id: Date.now() + 1000,
+          sender: 'ai',
+          message: 'Session Summary',
+          message_type: 'session_summary',
+          session_summary: response.session_summary,
+          created_at: new Date().toISOString()
         };
-
-        // If there's a session summary, append it after AI messages
-        if (response.session_summary) {
-          const summaryMessage: TopicChatMessage = {
-            id: Date.now() + 1000,
-            sender: 'ai',
-            message: 'Session Summary',
-            message_type: 'session_summary',
-            session_summary: response.session_summary,
-            created_at: new Date().toISOString()
-          };
-
-          setMessages(prev => {
-            // remove the temporary placeholder (assumed to be last)
-            const withoutLast = prev.slice(0, -1);
-            return [...withoutLast, serverMsg, ...newAIMessages, summaryMessage];
-          });
-          return;
-        }
-
-        // No session summary: replace placeholder and append AI messages
-        setMessages(prev => {
-          const withoutLast = prev.slice(0, -1);
-          return [...withoutLast, serverMsg, ...newAIMessages];
-        });
-      } else {
-        // No server userMessage returned; fallback: append AI messages after placeholder
-        if (response.session_summary) {
-          const summaryMessage: TopicChatMessage = {
-            id: Date.now() + 1000,
-            sender: 'ai',
-            message: 'Session Summary',
-            message_type: 'session_summary',
-            session_summary: response.session_summary,
-            created_at: new Date().toISOString()
-          };
-          setMessages(prev => [...prev, ...newAIMessages, summaryMessage]);
-        } else {
-          setMessages(prev => [...prev, ...newAIMessages]);
-        }
+        newAIMessages.push(summaryMessage);
       }
+
+      // Update the user message in place (instant)
+      setMessages(prev => {
+        const nextMessages = [...prev];
+        const lastIndex = nextMessages.length - 1;
+
+        // Ensure we are updating the correct message (stats matching)
+        if (nextMessages[lastIndex].id === userMessageId) {
+          if (serverUserMessage) {
+            nextMessages[lastIndex] = {
+              id: serverUserMessage.id, // Update ID to server ID
+              sender: 'user',
+              // Guard against replacing user text with AI meta-commentary
+              message: (serverUserMessage.message && !serverUserMessage.message.startsWith("The user"))
+                ? serverUserMessage.message
+                : textToSend,
+              message_type: serverUserMessage.message_type || 'text',
+              options: serverUserMessage.options || [],
+              diff_html: serverUserMessage.diff_html || null,
+              emoji: serverUserMessage.emoji || undefined,
+              file_url: serverUserMessage.file_url || undefined,
+              file_type: serverUserMessage.file_type || undefined,
+              created_at: serverUserMessage.created_at || new Date().toISOString()
+            };
+
+            // Note: We keep local ID if needed, but here we can stick to server ID as we updated options
+            nextMessages[lastIndex].id = userMessageId;
+          }
+        }
+        return nextMessages;
+      });
+
+      setSending(false); // Stop "sending" state from the initial request
+
+      // NOW Simulate the AI typing for the response messages
+      simulateIncomingMessages(newAIMessages);
 
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to send message');
+      setSending(false);
 
       // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
@@ -311,10 +422,8 @@ export default function TopicChatScreen() {
         Alert.alert('Error', error.message);
         // Restore input and remove temporary message
         setInputText(textToSend);
-        setMessages(prev => prev.slice(0, -1));
+        setMessages(prev => prev.filter(m => m.id !== userMessageId));
       }
-    } finally {
-      setSending(false);
     }
   };
 
@@ -355,8 +464,12 @@ export default function TopicChatScreen() {
           created_at: m.created_at || new Date().toISOString()
         };
 
-        // Parse session_metrics from diff_html if present
-        if (m.message_type === 'session_summary' && m.diff_html) {
+        // Priority 1: Direct session_metrics from backend (New format)
+        if (m.session_metrics) {
+          msg.session_summary = m.session_metrics;
+        }
+        // Priority 2: Parse from diff_html (Legacy fallback)
+        else if (m.message_type === 'session_summary' && m.diff_html) {
           try {
             msg.session_summary = JSON.parse(m.diff_html);
           } catch (e) {
@@ -368,7 +481,7 @@ export default function TopicChatScreen() {
       });
 
       if (aiMsgs.length > 0) {
-        setMessages(prev => [...prev, ...aiMsgs]);
+        await simulateIncomingMessages(aiMsgs); // Simulate typing for response
       }
 
       // Optionally update feedbackMap if server returned feedback
@@ -514,7 +627,7 @@ export default function TopicChatScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </Pressable>
 
         <View style={styles.headerContent}>
@@ -522,7 +635,7 @@ export default function TopicChatScreen() {
           <View style={styles.headerText}>
             <Text style={styles.headerTitle}>{topic?.title || topicTitle}</Text>
             <View style={styles.timerContainer}>
-              <Ionicons name="time-outline" size={14} color={THEME.colors.text.secondary} />
+              <Ionicons name="time-outline" size={14} color="#FFFFFF" />
               <Text style={styles.timerText}>{elapsedTime}</Text>
             </View>
           </View>
@@ -556,28 +669,22 @@ export default function TopicChatScreen() {
           {messages.map((message, index) => renderMessage(message, index))}
 
           {sending && (
-            <View style={styles.typingIndicator}>
+            <View style={styles.messageRow}>
               <View style={styles.aiAvatar}>
                 <Image source={LOGO_IMG} style={styles.aiAvatarImage} resizeMode="contain" />
               </View>
-              <View style={styles.typingBubble}>
-                <View style={styles.typingDots}>
-                  <View style={[styles.typingDot, styles.typingDot1]} />
-                  <View style={[styles.typingDot, styles.typingDot2]} />
-                  <View style={[styles.typingDot, styles.typingDot3]} />
-                </View>
-              </View>
+              <TypingIndicator />
             </View>
           )}
         </ScrollView>
 
         {/* Input Area */}
-        <View style={styles.inputContainer}>
-          <View style={styles.inputForm}>
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.inputWrapper}>
             <TextInput
               style={styles.textInput}
               placeholder="Type your answer..."
-              placeholderTextColor={THEME.colors.text.secondary}
+              placeholderTextColor="rgba(255,255,255,0.7)"
               value={inputText}
               onChangeText={setInputText}
               multiline
@@ -588,20 +695,33 @@ export default function TopicChatScreen() {
               onSubmitEditing={() => handleSendMessage()}
             />
 
-            <Pressable
-              style={[
-                styles.sendButton,
-                (!inputText.trim() || sending) && styles.sendButtonDisabled
-              ]}
-              onPress={() => handleSendMessage()}
-              disabled={!inputText.trim() || sending}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons name="arrow-up" size={24} color="#fff" />
-              )}
-            </Pressable>
+            <View style={styles.inputActions}>
+              <Pressable
+                style={styles.actionButton}
+                onPress={handleMicPress}
+              >
+                <Ionicons
+                  name={isListening ? "mic" : "mic-outline"}
+                  size={24}
+                  color={isListening ? "#FFD700" : "#FFF"}
+                />
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.sendButton,
+                  (!inputText.trim() || sending) && styles.sendButtonDisabled
+                ]}
+                onPress={() => handleSendMessage()}
+                disabled={!inputText.trim() || sending}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color="#9269F0" />
+                ) : (
+                  <Ionicons name="arrow-up" size={24} color="#9269F0" />
+                )}
+              </Pressable>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -612,7 +732,7 @@ export default function TopicChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: '#ffffff',
   },
   loadingContainer: {
     flex: 1,
@@ -644,7 +764,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: THEME.colors.primary,
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -660,9 +780,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 12,
-    backgroundColor: THEME.colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
+    backgroundColor: '#8B5CF6',
+    borderBottomWidth: 0,
   },
   backButton: {
     marginRight: 12,
@@ -676,6 +795,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     marginRight: 12,
+    borderRadius: 16,
   },
   headerText: {
     flex: 1,
@@ -683,7 +803,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: THEME.colors.text.primary,
+    color: '#FFFFFF',
   },
   timerContainer: {
     flexDirection: 'row',
@@ -692,7 +812,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 13,
-    color: THEME.colors.text.secondary,
+    color: '#FFFFFF',
     fontWeight: '500',
     marginLeft: 4,
   },
@@ -765,79 +885,48 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
   },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  typingBubble: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 16,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    borderBottomLeftRadius: 4,
-  },
-  typingDots: {
-    flexDirection: 'row',
-  },
-  typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: THEME.colors.text.light,
-    marginHorizontal: 2,
-  },
-  typingDot1: {
-    opacity: 0.4,
-  },
-  typingDot2: {
-    opacity: 0.7,
-  },
-  typingDot3: {
-    opacity: 1,
-  },
+
   inputContainer: {
+    padding: 16,
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: THEME.colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderTopColor: 'transparent',
   },
-  inputForm: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    backgroundColor: '#8B5CF6',
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 48,
   },
   textInput: {
     flex: 1,
-    height: 50,
-    paddingHorizontal: 20,
-    backgroundColor: THEME.colors.background,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    color: THEME.colors.text.primary,
     fontSize: 16,
+    color: '#FFF',
+    maxHeight: 100,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 4,
+  },
+  inputActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 6,
   },
   sendButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: THEME.colors.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
-    shadowColor: THEME.colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: THEME.colors.border,
-    shadowOpacity: 0,
-    elevation: 0,
-  }
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
 });

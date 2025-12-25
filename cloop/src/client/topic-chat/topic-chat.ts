@@ -34,6 +34,7 @@ export interface TopicChatMessage {
     recommendations: string[];
     performance_percent: number;
   };
+  session_metrics?: any; // NEW: Backend sometimes sends this instead of session_summary
 }
 
 export interface TopicGoal {
@@ -140,15 +141,15 @@ export interface SendMessageResponse {
  */
 export const fetchTopicChatMessages = async (
   topicId: number,
-  opts?: { 
-    userId?: number; 
-    baseUrl?: string; 
+  opts?: {
+    userId?: number;
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<TopicChatResponse> => {
   const base = opts?.baseUrl || API_BASE_URL;
   const url = new URL(`/api/topic-chats/${topicId}`, base);
-  
+
   if (opts?.userId) {
     url.searchParams.set('user_id', String(opts.userId));
   }
@@ -185,15 +186,15 @@ export const sendTopicChatMessage = async (
     file_type?: string;
     session_time_seconds?: number;
   },
-  opts?: { 
-    userId?: number; 
-    baseUrl?: string; 
+  opts?: {
+    userId?: number;
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<SendMessageResponse> => {
   const base = opts?.baseUrl || API_BASE_URL;
   const url = new URL(`/api/topic-chats/${topicId}/message`, base);
-  
+
   if (opts?.userId) {
     url.searchParams.set('user_id', String(opts.userId));
   }
@@ -225,15 +226,15 @@ export const sendTopicChatMessage = async (
  */
 export const uploadFile = async (
   file: any,
-  opts?: { 
-    baseUrl?: string; 
+  opts?: {
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<{ file_url: string; file_type: string }> => {
   // This is a placeholder implementation
   // In a real app, you would upload to a file storage service
   // and return the URL and type
-  
+
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({

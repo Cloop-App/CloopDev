@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Pressable, Image, StatusBar, ScrollView, SafeAreaView, Modal, Platform, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Pressable, Image, StatusBar, ScrollView, SafeAreaView, Modal, Platform, RefreshControl, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserProfile } from '../../src/client/profile/useUserProfile';
 import { useChatHistory } from '../../src/client/profile/useProgress';
 import { THEME } from '../../src/constants/theme';
+import { BottomNavigation } from '../../components/navigation/BottomNavigation';
+import { SubjectIcon } from '../../components/common/SubjectIcon';
+
+const CLOOP_ICON = require('../../assets/images/cloop-icon.png');
+
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -31,6 +36,31 @@ export default function HomeScreen() {
   const [isMounted, setIsMounted] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [chatHistoryRefreshing, setChatHistoryRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('home');
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    if (isAuthenticated && ((user as any)?.token || (user as any)?.session?.access_token)) {
+      try {
+        const token = (user as any)?.token || (user as any)?.session?.access_token;
+        // Dynamic import or ensure client is imported
+        const { getUnreadNotificationCount } = require('../../src/client/notifications');
+        const count = await getUnreadNotificationCount(token);
+        setUnreadCount(count);
+      } catch (error) {
+        console.error('Error fetching unread count:', error);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUnreadCount();
+      // Optional: Polling or focus effect could go here
+    }
+  }, [isAuthenticated, refreshing]); // Re-fetch on refresh
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -197,11 +227,7 @@ export default function HomeScreen() {
       onPress={() => router.push(`/chapter-topic/chapter?subjectId=${userSubject.subject.id}&subjectName=${encodeURIComponent(userSubject.subject.name)}` as any)}
     >
       <View style={styles.subjectIcon}>
-        <Ionicons
-          name={getSubjectIcon(userSubject.subject.name)}
-          size={24}
-          color={THEME.colors.primary}
-        />
+        <SubjectIcon subject={userSubject.subject.name} size={40} />
       </View>
       <Text style={styles.subjectName}>{userSubject.subject.name}</Text>
       <Text style={styles.subjectProgress}>
@@ -215,56 +241,105 @@ export default function HomeScreen() {
 
   const getSubjectIcon = (subject: string): any => {
     const icons: { [key: string]: any } = {
-      'Mathematics': 'calculator-outline',
-      'Physics': 'atom-outline',
-      'Chemistry': 'flask-outline',
-      'Biology': 'leaf-outline',
-      'History': 'library-outline',
-      'Geography': 'earth-outline',
-      'English': 'book-outline',
-      'Hindi': 'language-outline',
+      'Mathematics': 'calculator',
+      'Physics': 'flask',
+      'Chemistry': 'flask',
+      'Biology': 'flower',
+      'History': 'book',
+      'Geography': 'globe',
+      'English': 'book',
+      'Hindi': 'language',
+      'Literature': 'book',
+      'Fine Art': 'brush',
+      'Economics': 'stats-chart',
     };
-    return icons[subject] || 'book-outline';
+    return icons[subject] || 'book';
+  };
+
+  const getSubjectColor = (subject: string): string => {
+    const colors: { [key: string]: string } = {
+      'Mathematics': '#E8F5E9',
+      'Physics': '#E3F2FD',
+      'Chemistry': '#FFF3E0',
+      'Biology': '#F3E5F5',
+      'History': '#FFE0B2',
+      'Geography': '#E0F2F1',
+      'English': '#FCE4EC',
+      'Hindi': '#FFF9C4',
+      'Literature': '#FFEBEE',
+      'Fine Art': '#FFF3E0',
+      'Economics': '#FFE0B2',
+    };
+    return colors[subject] || '#F5F5F5';
+  };
+
+  const getSubjectIconColor = (subject: string): string => {
+    const colors: { [key: string]: string } = {
+      'Mathematics': '#4CAF50',
+      'Physics': '#2196F3',
+      'Chemistry': '#FF9800',
+      'Biology': '#9C27B0',
+      'History': '#FF5722',
+      'Geography': '#009688',
+      'English': '#E91E63',
+      'Hindi': '#FBC02D',
+      'Literature': '#F44336',
+      'Fine Art': '#FF9800',
+      'Economics': '#FF5722',
+    };
+    return colors[subject] || '#8B5CF6';
+  };
+
+  const getBoardCode = (boardName: string): string => {
+    if (!boardName) return '';
+    const name = boardName.toLowerCase();
+    if (name.includes('central board')) return 'CBSE';
+    if (name.includes('indian certificate')) return 'ICSE';
+    if (name.includes('state board')) return 'State Board';
+    // Return acronym if possible
+    const match = boardName.match(/\b(\w)/g);
+    return match ? match.join('').toUpperCase() : boardName;
+  };
+
+  const getGradeDisplay = (grade: string | undefined) => {
+    if (!grade) return '';
+    const cleanGrade = grade.replace(/^Class\s+/i, '');
+    return `Class ${cleanGrade}`;
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Pressable
-            style={styles.sidebarToggle}
-            onPress={() => setShowSidebar(true)}
-          >
-            <Ionicons name="menu" size={24} color={THEME.colors.text.primary} />
-          </Pressable>
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.userName}>{user?.name || 'User'}!</Text>
-          </View>
-        </View>
-
-        <View style={styles.headerRight}>
-          <Pressable style={styles.headerIcon}>
-            <Ionicons name="notifications-outline" size={24} color={THEME.colors.text.primary} />
-            <View style={styles.notificationBadge} />
-          </Pressable>
-          <Pressable
-            style={styles.profileButton}
-            onPress={() => router.push('/profile/profile')}
-          >
+        <View style={styles.headerTop}>
+          <View style={styles.headerLeft}>
             <Image
-              source={{
-                uri: profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=EF4444&color=fff&size=128`
-              }}
-              style={styles.profileAvatar}
+              source={CLOOP_ICON}
+              style={styles.headerAvatar}
+              resizeMode="contain"
             />
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerGreeting}>
+                Hi {user?.name?.split(' ')[0] || 'User'},
+                <Text style={styles.headerClass}> {getGradeDisplay(academicInfo?.grade_level || '10')} | {getBoardCode(academicInfo?.board || 'CBSE')}</Text>
+              </Text>
+              <Text style={styles.headerSubtitle}>Let's get started!</Text>
+            </View>
+          </View>
+          <Pressable style={styles.notificationButton} onPress={() => router.push('/notifications/notifications' as any)}>
+            <Ionicons name="notifications" size={24} color="#FFFFFF" />
+            {unreadCount > 0 && (
+              <View style={styles.badgeContainer}>
+                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </View>
 
+      {/* Content */}
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
@@ -272,457 +347,370 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[THEME.colors.primary]}
-            tintColor={THEME.colors.primary}
+            colors={['#8B5CF6']}
+            tintColor="#8B5CF6"
           />
         }
       >
-        {/* Board Information Card */}
-        <View style={styles.boardCard}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="school-outline" size={24} color={THEME.colors.primary} />
-            <Text style={styles.cardTitle}>Your Board</Text>
-          </View>
-          <Text style={styles.boardName}>{academicInfo?.board || 'Not selected'}</Text>
-          <Text style={styles.gradeLevel}>Grade {academicInfo?.grade_level || 'N/A'}</Text>
-        </View>
-
-        {/* Subjects Grid */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Subjects</Text>
-          <View style={styles.subjectsGrid}>
-            {academicInfo?.user_subjects && academicInfo.user_subjects.length > 0 ? (
-              academicInfo.user_subjects.map((userSubject, index) => renderSubjectCard(userSubject, index))
-            ) : academicInfo?.subjects && academicInfo.subjects.length > 0 ? (
-              // Fallback to old subjects array for backward compatibility
-              academicInfo.subjects.map((subject, index) => (
-                <Pressable
-                  key={index}
-                  style={styles.subjectCard}
-                  onPress={() => {
-                    // For old subjects array, we don't have subject ID, so show a message
-                    alert('Please update your profile to access chapters')
-                  }}
-                >
-                  <View style={styles.subjectIcon}>
-                    <Ionicons
-                      name={getSubjectIcon(subject)}
-                      size={24}
-                      color={THEME.colors.primary}
-                    />
-                  </View>
-                  <Text style={styles.subjectName}>{subject}</Text>
-                  <Text style={styles.subjectProgress}>Continue Learning</Text>
-                </Pressable>
-              ))
-            ) : (
-              <Text style={styles.noSubjects}>No subjects selected</Text>
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search-outline" size={20} color="#9CA3AF" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search Topics"
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={20} color="#8B5CF6" />
+              </Pressable>
             )}
           </View>
-        </View>
-
-        {/* Live Agentic Tutor Button */}
-        <View style={styles.section}>
-          <Pressable
-            style={styles.fullWidthActionButton}
-            onPress={() => router.push('/chat/normal-chat' as any)}
-          >
-            <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
-            <Text style={styles.actionText}>Live Agentic Tutor</Text>
+          <Pressable style={styles.searchFilterButton}>
+            <Ionicons name="options-outline" size={24} color="#FFFFFF" />
           </Pressable>
         </View>
 
-        {/* Track Progress */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Track Progress</Text>
-            <Pressable
-              style={styles.viewMetricsButton}
-              onPress={() => router.push('/profile/metrics' as any)}
-            >
-              <Text style={styles.viewMetricsText}>View Metrics</Text>
-              <Ionicons name="arrow-forward" size={16} color={THEME.colors.primary} />
-            </Pressable>
-          </View>
-          <View style={styles.trackProgressCard}>
-            {academicInfo?.user_subjects && academicInfo.user_subjects.length > 0 ? (
-              academicInfo.user_subjects.map((userSubject, index) => (
-                <View key={index} style={styles.trackProgressItem}>
-                  <View style={styles.trackProgressHeader}>
-                    <Text style={styles.trackProgressSubject}>{userSubject.subject.name}</Text>
-                    <Text style={styles.trackProgressPercent}>{userSubject.completion_percent}%</Text>
-                  </View>
-                  <View style={styles.trackProgressBar}>
-                    <View
-                      style={[
-                        styles.trackProgressFill,
-                        { width: `${userSubject.completion_percent}%` }
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.trackProgressText}>
-                    {userSubject.completed_chapters}/{userSubject.total_chapters} chapters completed
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.noProgress}>No subjects enrolled yet</Text>
-            )}
-          </View>
-        </View>
-      </ScrollView>
+        {/* Enrolled Subjects Title */}
+        <Text style={styles.enrolledTitle}>Enrolled Subjects</Text>
 
-      {renderSidebar()}
-    </SafeAreaView>
+        {/* Subjects Grid */}
+        <View style={styles.subjectsGrid}>
+          {academicInfo?.user_subjects && academicInfo.user_subjects.length > 0 ? (
+            academicInfo.user_subjects.map((userSubject, index) => (
+              <Pressable
+                key={index}
+                style={styles.subjectCard}
+                onPress={() => router.push(`/chapter-topic/chapter?subjectId=${userSubject.subject.id}&subjectName=${encodeURIComponent(userSubject.subject.name)}` as any)}
+              >
+                <View style={styles.subjectIconContainer}>
+                  <SubjectIcon subject={userSubject.subject.name} size={60} />
+                </View>
+                <Text style={styles.subjectName}>{userSubject.subject.name}</Text>
+              </Pressable>
+            ))
+          ) : academicInfo?.subjects && academicInfo.subjects.length > 0 ? (
+            academicInfo.subjects.map((subject, index) => (
+              <Pressable
+                key={index}
+                style={styles.subjectCard}
+                onPress={() => alert('Please update your profile to access chapters')}
+              >
+                <View style={styles.subjectIconContainer}>
+                  <SubjectIcon subject={subject} size={60} />
+                </View>
+                <Text style={styles.subjectName}>{subject}</Text>
+              </Pressable>
+            ))
+          ) : (
+            <Text style={styles.noSubjects}>No subjects selected</Text>
+          )}
+        </View>
+
+        <View style={{ height: 100 }} />
+      </ScrollView >
+
+      {/* Floating Ask Tutor Button */}
+      < Pressable
+        style={styles.floatingButton}
+        onPress={() => router.push('/chat/normal-chat' as any)
+        }
+      >
+        <Text style={styles.floatingButtonText}>Ask Tutor?</Text>
+        <View style={styles.floatingButtonIcon}>
+          <Ionicons name="send" size={20} color="#FFFFFF" />
+        </View>
+      </Pressable >
+
+      {/* Custom Bottom Navigation */}
+      < BottomNavigation
+        activeTab={activeTab}
+        onTabPress={(tabId) => {
+          setActiveTab(tabId);
+          if (tabId === 'session') router.push('/chapter-topic/session' as any);
+          else if (tabId === 'statistics') router.push('/metrices/home' as any);
+          else if (tabId === 'profile') router.push('/profile/profile' as any);
+          // if home, just stay or scroll to top
+        }}
+      />
+    </View >
   );
 }
+
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: '#F5F5F5',
   },
   header: {
+    backgroundColor: '#8B5CF6',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 40,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 0, // Rectangular
+    borderBottomRightRadius: 0,
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 15 : 15,
-    backgroundColor: THEME.colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  sidebarToggle: {
-    marginRight: 15,
+  headerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
   },
-  greetingContainer: {
+  headerTextContainer: {
     flex: 1,
   },
-  greeting: {
-    fontSize: 14,
-    color: THEME.colors.text.secondary,
-  },
-  userName: {
+  headerGreeting: {
     fontSize: 18,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  headerRight: {
+  headerClass: {
+    fontWeight: '400',
+    fontSize: 14,
+    color: '#E9D5FF',
+  },
+  headerBoard: {
+    fontWeight: '600',
+    fontSize: 16,
+    color: '#F3E8FF',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#E9D5FF',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#8B5CF6',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    marginBottom: 24,
+    marginTop: 12, // Reduced top margin
   },
-  headerIcon: {
-    marginRight: 15,
-    position: 'relative',
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E9D5FF',
+    borderRadius: 20, // Full pill shape
+    paddingHorizontal: 12,
+    height: 40,
   },
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: THEME.colors.primary,
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#000000',
+    paddingVertical: 0,
   },
-  profileButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  profileAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  searchFilterButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10, // Reduced from 20 to 10
   },
-  boardCard: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
-    marginLeft: 8,
-  },
-  boardName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: THEME.colors.primary,
-    marginBottom: 5,
-  },
-  gradeLevel: {
-    fontSize: 14,
-    color: THEME.colors.text.secondary,
-  },
-  section: {
-    marginBottom: 25,
-  },
-  sectionTitle: {
+  enrolledTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
-    marginBottom: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 16,
   },
   subjectsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
   subjectCard: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    width: '47%',
+    width: '31%', // Slight increase to reduce horizontal gaps
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 10, // Reduced from 16
+    alignItems: 'center',
+    marginBottom: 12, // Reduced from 16
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  subjectIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FEF2F2', // Light red
+  subjectIconContainer: {
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 4, // Reduced from 8
   },
   subjectName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
-    marginBottom: 5,
-  },
-  subjectProgress: {
-    fontSize: 12,
-    color: THEME.colors.text.secondary,
-  },
-  subjectCompletion: {
     fontSize: 11,
-    color: THEME.colors.primary,
-    fontWeight: '500',
-    marginTop: 2,
+    fontWeight: '600',
+    color: '#1F2937',
+    textAlign: 'center',
   },
   noSubjects: {
     fontSize: 14,
-    color: THEME.colors.text.secondary,
-    fontStyle: 'italic',
-  },
-  quickActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    backgroundColor: THEME.colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  fullWidthActionButton: {
-    backgroundColor: THEME.colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    color: '#9CA3AF',
+    textAlign: 'center',
     width: '100%',
-    justifyContent: 'center',
+    marginTop: 40,
   },
-  actionText: {
-    color: '#fff',
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  progressCard: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 10,
+  floatingButton: {
+    position: 'absolute',
+    bottom: 100, // Adjusted for new nav bar
+    right: 20,
+    backgroundColor: '#8B5CF6',
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  progressItem: {
     alignItems: 'center',
+    paddingVertical: 12,
+    paddingLeft: 20,
+    paddingRight: 16,
+    borderRadius: 30,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 100,
   },
-  progressNumber: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: THEME.colors.primary,
+  floatingButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 8,
   },
-  progressLabel: {
-    fontSize: 12,
-    color: THEME.colors.text.secondary,
-    marginTop: 5,
+  floatingButtonIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#A78BFA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sidebarOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
   },
   sidebar: {
-    width: '80%',
-    height: '100%',
-    backgroundColor: THEME.colors.background,
-    paddingTop: 50,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '80%',
+    padding: 20,
   },
   sidebarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
+    marginBottom: 20,
   },
   sidebarTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
   },
   sidebarContent: {
     flex: 1,
-    paddingTop: 10,
+  },
+  loadingText: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: '#6B7280',
+  },
+  errorText: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: 'red',
   },
   chatHistoryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
+    borderBottomColor: '#F3F4F6',
   },
   chatHistoryTextContainer: {
-    flex: 1,
     marginLeft: 12,
+    flex: 1,
   },
   chatHistoryText: {
-    fontSize: 14,
-    color: THEME.colors.text.primary,
+    fontSize: 16,
     fontWeight: '500',
+    color: '#1F2937',
   },
   chatHistorySubject: {
     fontSize: 12,
-    color: THEME.colors.text.secondary,
+    color: '#6B7280',
     marginTop: 2,
   },
-  loadingText: {
-    fontSize: 14,
-    color: THEME.colors.text.secondary,
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
-  errorText: {
-    fontSize: 14,
-    color: THEME.colors.primary,
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
   noChatHistory: {
-    fontSize: 14,
-    color: THEME.colors.text.secondary,
     textAlign: 'center',
-    paddingVertical: 20,
-    fontStyle: 'italic',
+    marginTop: 40,
+    color: '#9CA3AF',
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  subjectIcon: {
+    marginBottom: 10,
     alignItems: 'center',
-    marginBottom: 15,
+    justifyContent: 'center',
   },
-  viewMetricsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#FEF2F2', // Light red
-    borderRadius: 6,
+  subjectProgress: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginTop: 4,
   },
-  viewMetricsText: {
-    fontSize: 12,
-    color: THEME.colors.primary,
+  subjectCompletion: {
+    fontSize: 10,
+    color: '#10B981',
+    marginTop: 2,
     fontWeight: '500',
-    marginRight: 4,
-  },
-  trackProgressCard: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  trackProgressItem: {
-    marginBottom: 15,
-  },
-  trackProgressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  trackProgressSubject: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
-  },
-  trackProgressPercent: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.colors.primary,
-  },
-  trackProgressBar: {
-    height: 6,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 3,
-    marginBottom: 6,
-  },
-  trackProgressFill: {
-    height: '100%',
-    backgroundColor: THEME.colors.secondary, // Yellow for progress
-    borderRadius: 3,
-  },
-  trackProgressText: {
-    fontSize: 12,
-    color: THEME.colors.text.secondary,
-  },
-  noProgress: {
-    fontSize: 14,
-    color: THEME.colors.text.secondary,
-    textAlign: 'center',
-    fontStyle: 'italic',
   },
 });

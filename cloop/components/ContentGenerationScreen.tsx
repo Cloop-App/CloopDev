@@ -7,8 +7,8 @@ import {
   checkGenerationStatus,
   resetGeneration,
   GenerationStatus,
-} from '../../src/client/content-generation/content-generation';
-import { useAuth } from '../../src/context/AuthContext';
+} from '../src/client/content-generation/content-generation';
+import { useAuth } from '../src/context/AuthContext';
 
 interface SubjectStatus {
   subjectId: number;
@@ -35,7 +35,7 @@ export default function ContentGenerationScreen() {
       if (!user?.user_id || !token) return;
 
       const response = await getAllGenerationStatuses(user.user_id, token);
-      
+
       // Map statuses to subjects
       const subjectStatuses: SubjectStatus[] = user.subjects?.map((subjectCode: string) => {
         const status = response.data.find(
@@ -90,10 +90,10 @@ export default function ContentGenerationScreen() {
             prev.map((s, i) =>
               i === index
                 ? {
-                    ...s,
-                    status: response.status!,
-                    loading: response.status!.status === 'in_progress',
-                  }
+                  ...s,
+                  status: response.status!,
+                  loading: response.status!.status === 'in_progress',
+                }
                 : s
             )
           );
@@ -129,7 +129,7 @@ export default function ContentGenerationScreen() {
             onPress: async () => {
               setGeneratingAll(true);
               await generateContentForAllSubjects(user.user_id!, token);
-              
+
               // Start polling for all subjects
               statuses.forEach((_, index) => {
                 const subjectId = statuses[index].subjectId;

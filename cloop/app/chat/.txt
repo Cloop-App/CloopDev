@@ -1,0 +1,8 @@
+the new chat sm as web
+no buttons and strike for correct answer indentation 
+for convesatnal responses no action in the lerners chat buble
+for wrng ans chat txt will changed to red color and strike through will be added 
+do not combine chat buble of tutor and learner, 
+the system should only tags errors and inavilabity of the student to response
+example--idk,no,i dont know, what ever, ect
+then system shild generate a report 

@@ -17,13 +17,19 @@ export const getApiBaseUrl = (): string => {
 
   const envUrl = process.env?.EXPO_PUBLIC_API_URL;
 
-  const resolved = extraUrl || envUrl || 'https://api.cloopapp.com';
+  let resolved = extraUrl || envUrl || 'http://localhost:4000';
+
+  // Helper for Android Emulator (localhost -> 10.0.2.2)
+  if (Platform.OS === 'android' && (resolved.includes('localhost') || resolved.includes('127.0.0.1'))) {
+    resolved = resolved.replace('localhost', '10.0.2.2').replace('127.0.0.1', '10.0.2.2');
+    console.log('[getApiBaseUrl] Remapped localhost to 10.0.2.2 for Android');
+  }
   if (!__DEV__) {
     // minimal runtime logging so we can see the resolved base URL in release logs
     try {
       // eslint-disable-next-line no-console
       console.log('[getApiBaseUrl] resolved:', resolved);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   return resolved;

@@ -5,19 +5,24 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ScrollView,
-  SafeAreaView,
-  StatusBar,
-  ActivityIndicator,
-  Image,
-  Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  StatusBar,
+  ScrollView,
+  Image,
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  Modal,
+  Dimensions,
+  Animated,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../src/context/AuthContext';
 import { THEME } from '../../src/constants/theme';
+import { useAuth } from '../../src/context/AuthContext';
 import { useAuthErrorHandler } from '../../src/hooks/useAuthErrorHandler';
 import {
   fetchNormalChatMessages,
@@ -25,8 +30,11 @@ import {
   clearNormalChatHistory,
   NormalChatMessage
 } from '../../src/client/normal-chat/normal-chat';
+import { useSpeechRecognition } from '../../src/hooks/useSpeechRecognition';
+import { saveChatSession, getChatSessions, deleteChatSession, ChatSession, clearAllSessions } from '../../src/utils/chatHistory';
 
-const LOGO_IMG = require('../../assets/images/logo.png');
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
 
 export default function NormalChatScreen() {
   const router = useRouter();
@@ -38,7 +46,48 @@ export default function NormalChatScreen() {
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [historySessions, setHistorySessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
+
+  // Drawer State
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+
+  const {
+    isListening,
+    transcript,
+    startListening,
+    stopListening,
+    hasPermission,
+    requestPermission
+  } = useSpeechRecognition();
+
+  const [textBeforeSpeech, setTextBeforeSpeech] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    if (transcript) {
+      setInputText(textBeforeSpeech + (textBeforeSpeech ? ' ' : '') + transcript);
+    }
+  }, [transcript]);
+
+  const handleMicPress = async () => {
+    if (isListening) {
+      await stopListening();
+    } else {
+      if (!hasPermission) {
+        const granted = await requestPermission();
+        if (!granted) {
+          Alert.alert('Permission Required', 'Microphone permission is needed for voice input.');
+          return;
+        }
+      }
+      setTextBeforeSpeech(inputText);
+      await startListening();
+    }
+  };
 
   useEffect(() => {
     if (user && token) {
@@ -47,11 +96,29 @@ export default function NormalChatScreen() {
   }, [user, token]);
 
   useEffect(() => {
-    // Auto scroll to bottom when new messages are added
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages]);
+
+  // Drawer Animation
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: isDrawerOpen ? 0 : -DRAWER_WIDTH,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [isDrawerOpen]);
+
+  // Load History on Mount
+  useEffect(() => {
+    loadHistorySessions();
+  }, []);
+
+  const loadHistorySessions = async () => {
+    const sessions = await getChatSessions();
+    setHistorySessions(sessions);
+  };
 
   const loadNormalChat = async () => {
     try {
@@ -66,12 +133,9 @@ export default function NormalChatScreen() {
       setMessages(response.messages);
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to load chat');
-
-      // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
       if (!wasAuthError) {
         setError(error.message);
-        console.error('Error loading normal chat:', err);
       }
     } finally {
       setLoading(false);
@@ -84,6 +148,23 @@ export default function NormalChatScreen() {
     const messageText = inputText.trim();
     setInputText('');
     setSending(true);
+    setIsTyping(true);
+
+    // Optimistically add user message
+    const tempUserMessage: NormalChatMessage = {
+      id: Date.now(), // Temp ID
+      user_id: user?.user_id || 0,
+      sender: 'user',
+      message: messageText,
+      message_type: 'text',
+      images: [],
+      videos: [],
+      links: [],
+      emoji: undefined,
+      created_at: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, tempUserMessage]);
 
     try {
       const response = await sendNormalChatMessage(
@@ -93,53 +174,81 @@ export default function NormalChatScreen() {
           token: token || undefined
         }
       );
-
-      // Add both user and AI messages to the chat
-      setMessages(prev => [...prev, response.userMessage, response.aiMessage]);
+      // Replace last message (temp) with real ones, or just append AI message if we want to keep the temp one simple.
+      // Better: Remove the temp message and append the real backend responses (which include the user message sanitized/stored)
+      setMessages(prev => {
+        const withoutTemp = prev.filter(m => m.id !== tempUserMessage.id);
+        return [...withoutTemp, response.userMessage, response.aiMessage];
+      });
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to send message');
-
-      // Handle authentication errors
       const wasAuthError = await handleAuthError(error);
       if (!wasAuthError) {
         Alert.alert('Error', error.message);
-        // Restore the input text if sending failed
-        setInputText(messageText);
+        setInputText(messageText); // Restore input
+        // Remove temp message on failure
+        setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id));
       }
     } finally {
       setSending(false);
+      setIsTyping(false);
     }
   };
 
-  const handleClearChat = () => {
-    Alert.alert(
-      'Clear Chat History',
-      'Are you sure you want to clear all your chat history? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await clearNormalChatHistory({
-                userId: user?.user_id,
-                token: token || undefined
-              });
-              setMessages([]);
-            } catch (err) {
-              const error = err instanceof Error ? err : new Error('Failed to clear chat history');
+  const handleNewChat = async () => {
+    // Save current session before clearing if it has messages
+    if (messages.length > 0) {
+      await saveChatSession(messages);
+      await loadHistorySessions(); // Refresh list
+    }
 
-              // Handle authentication errors
-              const wasAuthError = await handleAuthError(error);
-              if (!wasAuthError) {
-                Alert.alert('Error', error.message);
-              }
-            }
-          }
-        }
-      ]
-    );
+    // Immediate new chat
+    try {
+      setMessages([]);
+      setCurrentSessionId(null);
+      setIsDrawerOpen(false);
+      await clearNormalChatHistory({
+        userId: user?.user_id,
+        token: token || undefined
+      });
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to start new chat');
+    }
+  };
+
+  const handleLoadSession = async (session: ChatSession) => {
+    // If we are currently in a chat with messages, save it first? 
+    // For simplicity, let's assume switching sessions keeps the old one saved if it was already saved, 
+    // but if it's the *current* unsaved one, we should save it.
+    if (!currentSessionId && messages.length > 0) {
+      await saveChatSession(messages);
+    }
+
+    // We also need to clear the backend context because we are switching context locally
+    // but the backend is still on the "active" thread.
+    // This is the limitation: switching local history DOES NOT switch backend context.
+    // We will silent-clear backend to avoid mixing.
+    await clearNormalChatHistory({ userId: user?.user_id, token: token || undefined }).catch(() => { });
+
+    setMessages(session.messages);
+    setCurrentSessionId(session.id);
+    setIsDrawerOpen(false);
+
+    // Update list to reflect any new saves
+    await loadHistorySessions();
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    // If deleting current session
+    if (currentSessionId === sessionId) {
+      setMessages([]);
+      setCurrentSessionId(null);
+      await clearNormalChatHistory({ userId: user?.user_id, token: token || undefined });
+    }
+
+    const updated = await deleteChatSession(sessionId);
+    setHistorySessions(updated);
   };
 
   const renderMessage = (message: NormalChatMessage, index: number) => {
@@ -150,11 +259,14 @@ export default function NormalChatScreen() {
     return (
       <View key={`${message.id}-${index}`} style={[
         styles.messageContainer,
-        isUser && styles.userMessageContainer
+        isUser ? styles.userMessageContainer : styles.aiMessageContainer
       ]}>
         {isAI && (
           <View style={styles.aiAvatar}>
-            <Image source={LOGO_IMG} style={styles.aiAvatarImage} resizeMode="contain" />
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.aiAvatarImage}
+            />
           </View>
         )}
 
@@ -178,28 +290,7 @@ export default function NormalChatScreen() {
               {message.message}
             </Text>
           )}
-
-          <Text style={[
-            styles.messageTime,
-            isUser ? styles.userMessageTime : styles.aiMessageTime
-          ]}>
-            {new Date(message.created_at).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </Text>
         </View>
-
-        {isUser && (
-          <View style={styles.userAvatar}>
-            <Image
-              source={{
-                uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=10B981&color=fff&size=64`
-              }}
-              style={styles.userAvatarImage}
-            />
-          </View>
-        )}
       </View>
     );
   };
@@ -207,26 +298,9 @@ export default function NormalChatScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+        <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={THEME.colors.primary} />
-          <Text style={styles.loadingText}>Loading chat...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color={THEME.colors.primary} />
-          <Text style={styles.errorTitle}>Error</Text>
-          <Text style={styles.errorMessage}>{error}</Text>
-          <Pressable style={styles.retryButton} onPress={loadNormalChat}>
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </Pressable>
+          <ActivityIndicator size="large" color="#000" />
         </View>
       </SafeAreaView>
     );
@@ -234,46 +308,40 @@ export default function NormalChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={THEME.colors.background} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
 
       {/* Header */}
       <View style={styles.header}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </Pressable>
+        <View style={styles.headerLeft}>
+          <Pressable onPress={() => router.back()} style={styles.iconButton}>
+            <Ionicons name="arrow-back" size={28} color="#FFF" />
+          </Pressable>
+          <Image
+            source={require('../../assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <Text style={styles.headerTitle}>Cloop AI</Text>
+        </View>
 
-        <View style={styles.headerContent}>
-          <View style={styles.headerInfo}>
-            <Image source={LOGO_IMG} style={styles.headerLogo} resizeMode="contain" />
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Your Assistant</Text>
-              <Text style={styles.headerSubtitle}>Your personal study buddy</Text>
-            </View>
-          </View>
-          <View style={styles.headerActions}>
-            <View style={styles.onlineIndicator}>
-              <View style={styles.onlineDot} />
-              <Text style={styles.onlineText}>Online</Text>
-            </View>
-            <Pressable
-              style={styles.clearButton}
-              onPress={handleClearChat}
-            >
-              <Ionicons name="trash-outline" size={20} color="#6B7280" />
-            </Pressable>
-          </View>
+        <View style={styles.headerTitleContainer} />
+
+        <View style={styles.headerRight}>
+          <Pressable onPress={handleNewChat} style={styles.iconButton}>
+            <Ionicons name="add" size={32} color="#FFF" />
+          </Pressable>
+          <Pressable onPress={() => setIsDrawerOpen(true)} style={styles.iconButton}>
+            <Ionicons name="menu" size={28} color="#FFF" />
+          </Pressable>
         </View>
       </View>
 
+      {/* Main Chat Area */}
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        {/* Messages */}
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
@@ -282,94 +350,131 @@ export default function NormalChatScreen() {
         >
           {messages.length === 0 ? (
             <View style={styles.emptyState}>
-              <Image source={LOGO_IMG} style={styles.welcomeLogo} resizeMode="contain" />
-              <Text style={styles.welcomeTitle}>Welcome to Cloop AI! 🎓</Text>
-              <Text style={styles.welcomeMessage}>
-                I'm your personal AI study assistant. I can help you with homework,
-                explain concepts, answer questions, and support your learning journey across all subjects!
-              </Text>
-              <View style={styles.suggestionsContainer}>
-                <Text style={styles.suggestionsTitle}>Try asking:</Text>
-                <Pressable
-                  style={styles.suggestionCard}
-                  onPress={() => setInputText("Explain photosynthesis in simple terms")}
-                >
-                  <Text style={styles.suggestionText}>Explain photosynthesis in simple terms</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.suggestionCard}
-                  onPress={() => setInputText("Help me solve this math problem")}
-                >
-                  <Text style={styles.suggestionText}>Help me solve this math problem</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.suggestionCard}
-                  onPress={() => setInputText("What's the difference between mitosis and meiosis?")}
-                >
-                  <Text style={styles.suggestionText}>What's the difference between mitosis and meiosis?</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.suggestionCard}
-                  onPress={() => setInputText("Give me study tips for better focus")}
-                >
-                  <Text style={styles.suggestionText}>Give me study tips for better focus</Text>
-                </Pressable>
+              <View style={styles.emptyIconContainer}>
+                <Image
+                  source={require('../../assets/images/logo.png')}
+                  style={styles.emptyIconImage}
+                  resizeMode="contain"
+                />
               </View>
+              <Text style={styles.emptyGreeting}>Hi, {user?.name?.split(' ')[0] || 'there'}!</Text>
+              <Text style={styles.emptySubtext}>How can I help you today?</Text>
             </View>
           ) : (
-            messages.map((message, index) => renderMessage(message, index))
-          )}
-
-          {sending && (
-            <View style={styles.typingIndicator}>
-              <View style={styles.aiAvatar}>
-                <Image source={LOGO_IMG} style={styles.aiAvatarImage} resizeMode="contain" />
-              </View>
-              <View style={styles.typingBubble}>
-                <View style={styles.typingDots}>
-                  <View style={[styles.typingDot, styles.typingDot1]} />
-                  <View style={[styles.typingDot, styles.typingDot2]} />
-                  <View style={[styles.typingDot, styles.typingDot3]} />
+            <>
+              {messages.map((msg, index) => renderMessage(msg, index))}
+              {isTyping && (
+                <View style={styles.typingContainer}>
+                  <View style={styles.aiAvatar}>
+                    <Image
+                      source={require('../../assets/images/logo.png')}
+                      style={styles.aiAvatarImage}
+                    />
+                  </View>
+                  <View style={styles.typingBubble}>
+                    <ActivityIndicator size="small" color="#9269F0" />
+                    <Text style={styles.typingText}>Cloop AI is typing...</Text>
+                  </View>
                 </View>
-              </View>
-            </View>
+              )}
+            </>
           )}
         </ScrollView>
 
-        {/* Input Area */}
-        <View style={styles.inputContainer}>
-          <View style={styles.inputForm}>
+        {/* Minimal Input Area */}
+        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <View style={styles.inputWrapper}>
             <TextInput
               style={styles.textInput}
-              placeholder="Ask me anything about your studies..."
-              placeholderTextColor={THEME.colors.text.secondary}
+              placeholder="Message Cloop AI..."
+              placeholderTextColor="rgba(255,255,255,0.7)"
               value={inputText}
               onChangeText={setInputText}
-              multiline={false}
+              multiline={true} // Allow multiline but looks like single line
               editable={!sending}
             />
 
-            <Pressable
-              style={[
-                styles.sendButton,
-                (!inputText.trim() || sending) && styles.sendButtonDisabled
-              ]}
-              onPress={handleSendMessage}
-              disabled={!inputText.trim() || sending}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons name="arrow-up" size={24} color="#fff" />
-              )}
+            <View style={styles.inputActions}>
+              <Pressable onPress={handleMicPress} style={styles.actionButton}>
+                <Ionicons name={isListening ? "mic" : "mic-outline"} size={22} color={isListening ? "#FFD700" : "#FFF"} />
+              </Pressable>
+              <Pressable
+                onPress={handleSendMessage}
+                disabled={!inputText.trim() || sending}
+                style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color="#9269F0" />
+                ) : (
+                  <Ionicons name="arrow-forward" size={18} color="#9269F0" />
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* Drawer Overlay */}
+      {isDrawerOpen && (
+        <TouchableWithoutFeedback onPress={() => setIsDrawerOpen(false)}>
+          <View style={styles.drawerOverlay} />
+        </TouchableWithoutFeedback>
+      )}
+
+      {/* Sidebar Drawer */}
+      <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
+        <SafeAreaView style={styles.drawerContent}>
+          <View style={styles.drawerHeader}>
+            <Text style={styles.drawerTitle}>History</Text>
+            <Pressable onPress={() => setIsDrawerOpen(false)}>
+              <Ionicons name="close" size={24} color="#000" />
             </Pressable>
           </View>
 
-          <Text style={styles.disclaimer}>
-            Powered by OpenAI GPT • Always verify important information
-          </Text>
-        </View>
-      </KeyboardAvoidingView>
+          <ScrollView style={styles.drawerItems}>
+            <Pressable style={styles.periodHeader}>
+              <Text style={styles.periodText}>Recent</Text>
+            </Pressable>
+            {/* Since we don't have multi-threads, we just show 'Current Chat' or similar */}
+            {/* Current / New Chat Indicator */}
+            <Pressable
+              style={[styles.historyItem, !currentSessionId && { backgroundColor: 'rgba(0,0,0,0.05)' }]}
+              onPress={() => {
+                if (messages.length > 0 && !currentSessionId) return; // Already here
+                handleNewChat();
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#9269F0" style={{ marginRight: 10 }} />
+              <Text style={[styles.historyText, { color: '#9269F0', fontWeight: 'bold' }]}>
+                New Chat
+              </Text>
+            </Pressable>
+
+            {/* Saved History Items */}
+            {historySessions.map((session) => (
+              <View key={session.id} style={styles.historyItemWrapper}>
+                <Pressable
+                  style={[styles.historyItem, currentSessionId === session.id && { backgroundColor: 'rgba(0,0,0,0.05)' }]}
+                  onPress={() => handleLoadSession(session)}
+                >
+                  <Ionicons name="chatbubble-outline" size={18} color="#000" style={{ marginRight: 10 }} />
+                  <Text style={styles.historyText} numberOfLines={1}>
+                    {session.title || "Conversation"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.deleteIcon}
+                  onPress={() => handleDeleteSession(session.id)}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+          {/* Footer removed as requested */}
+        </SafeAreaView>
+      </Animated.View>
+
     </SafeAreaView>
   );
 }
@@ -377,327 +482,300 @@ export default function NormalChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: '#fff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: THEME.colors.text.secondary,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: THEME.colors.primary,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: THEME.colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  retryButton: {
-    backgroundColor: THEME.colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 12,
-    backgroundColor: THEME.colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
-  },
-  backButton: {
-    marginRight: 12,
-  },
-  headerContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16, // Increased padding
+    backgroundColor: '#9269F0', // Purple header
+    borderBottomWidth: 0,
+    elevation: 0,
   },
-  headerInfo: {
+  headerLeft: {
+    width: 'auto',
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 12,
   },
-  headerLogo: {
-    width: 32,
-    height: 32,
-    marginRight: 12,
+  headerRight: {
+    width: 'auto',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
   },
-  headerText: {
+  headerTitleContainer: {
     flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFF', // White title
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: THEME.colors.text.secondary,
-    marginTop: 1,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  onlineIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-    marginRight: 6,
-  },
-  onlineText: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '500',
-  },
-  clearButton: {
-    padding: 8,
+  iconButton: {
+    padding: 4,
   },
   chatContainer: {
     flex: 1,
+    backgroundColor: '#fff',
   },
   messagesContainer: {
     flex: 1,
   },
   messagesContent: {
-    padding: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    paddingBottom: 40,
   },
   emptyState: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 48,
+    // Removed marginTop: -40 to allow true centering
   },
-  welcomeLogo: {
-    width: 80,
-    height: 80,
-    marginBottom: 20,
+  emptyIconContainer: {
+    width: 120, // Increased size for logo
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#fff', // White bg for logo
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  welcomeTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: THEME.colors.text.primary,
-    marginBottom: 12,
-    textAlign: 'center',
+  emptyIconImage: {
+    width: 70,
+    height: 70,
   },
-  welcomeMessage: {
-    fontSize: 16,
-    color: THEME.colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-    paddingHorizontal: 20,
-  },
-  suggestionsContainer: {
-    width: '100%',
-    paddingHorizontal: 20,
-  },
-  suggestionsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.colors.text.primary,
-    marginBottom: 12,
-  },
-  suggestionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
+  emptyGreeting: {
+    fontSize: 22, // Slightly larger
+    fontWeight: 'bold',
+    color: '#111827',
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    shadowColor: THEME.colors.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
-  suggestionText: {
-    fontSize: 14,
-    color: THEME.colors.text.primary,
+  emptySubtext: {
+    fontSize: 16,
+    color: '#6b7280',
   },
   messageContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
-    alignItems: 'flex-end',
+    marginBottom: 24,
+  },
+  aiMessageContainer: {
+    justifyContent: 'flex-start',
+    paddingRight: 32,
   },
   userMessageContainer: {
     justifyContent: 'flex-end',
+    paddingLeft: 32,
   },
   aiAvatar: {
-    width: 32,
-    height: 32,
-    marginRight: 8,
-    justifyContent: 'center',
+    width: 30,
+    height: 30,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  aiIconPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#10a37f',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  aiAvatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginLeft: 8,
-  },
-  userAvatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  aiIconText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   messageBubble: {
-    maxWidth: '75%',
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderRadius: 8,
+    maxWidth: '100%',
   },
   userMessageBubble: {
-    backgroundColor: THEME.colors.primary,
-    borderBottomRightRadius: 4,
+    backgroundColor: '#f3f4f6',
+    padding: 12,
+    borderRadius: 16,
+    borderTopRightRadius: 4,
   },
   aiMessageBubble: {
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
+    backgroundColor: 'transparent',
+    padding: 0,
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#374151',
+  },
+  userMessageText: {
+    color: '#111827',
+  },
+  aiMessageText: {
+    color: '#374151',
   },
   messageImage: {
     width: 200,
     height: 150,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 8,
   },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  userMessageText: {
-    color: '#FFFFFF',
-  },
-  aiMessageText: {
-    color: THEME.colors.text.primary,
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4,
-  },
-  userMessageTime: {
-    color: '#FFFFFF',
-    opacity: 0.8,
-  },
-  aiMessageTime: {
-    color: THEME.colors.text.secondary,
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  typingBubble: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 16,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    borderBottomLeftRadius: 4,
-  },
-  typingDots: {
-    flexDirection: 'row',
-  },
-  typingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: THEME.colors.text.light,
-    marginHorizontal: 2,
-  },
-  typingDot1: {
-    opacity: 0.4,
-  },
-  typingDot2: {
-    opacity: 0.7,
-  },
-  typingDot3: {
-    opacity: 1,
-  },
-  inputContainer: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: THEME.colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  inputForm: {
+  typingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 20,
+    paddingLeft: 16, // Align with messages
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    padding: 12,
+    borderRadius: 16,
+    borderTopLeftRadius: 4,
+    gap: 8,
+  },
+  typingText: {
+    color: '#6b7280',
+    fontSize: 14,
+  },
+  headerLogo: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+    borderRadius: 15, // Circular
+  },
+  aiAvatarImage: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  inputContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: 'transparent',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#9269F0',
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 48,
   },
   textInput: {
     flex: 1,
-    height: 50,
-    paddingHorizontal: 20,
-    backgroundColor: THEME.colors.background,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    color: THEME.colors.text.primary,
     fontSize: 16,
+    color: '#FFF',
+    maxHeight: 100,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 4,
+  },
+  inputActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 6,
   },
   sendButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: THEME.colors.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
-    shadowColor: THEME.colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: THEME.colors.border,
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
-  disclaimer: {
-    fontSize: 11,
-    color: THEME.colors.text.secondary,
-    textAlign: 'center',
+
+  // Drawer Styles
+  drawerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 999,
   },
+  drawer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: DRAWER_WIDTH,
+    backgroundColor: '#FFF', // White Sidebar
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  drawerContent: {
+    flex: 1,
+    padding: 16,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  drawerTitle: {
+    color: '#000', // Dark title
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  drawerItems: {
+    flex: 1,
+  },
+  periodHeader: {
+    paddingVertical: 8,
+    marginTop: 12,
+  },
+  periodText: {
+    color: '#6b7280',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  historyItemWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  historyItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+  },
+  deleteIcon: {
+    padding: 8,
+  },
+  historyText: {
+    color: '#1f2937', // Dark text
+    fontSize: 14,
+    flex: 1,
+  },
+  // Removed footer styles
 });

@@ -3,7 +3,7 @@
  * Frontend interface for the AI content generation pipeline
  */
 
-import { API_BASE_URL } from '../config/api';
+import { API_BASE_URL } from '../../config/api';
 
 export interface GenerationStatus {
   id: number;

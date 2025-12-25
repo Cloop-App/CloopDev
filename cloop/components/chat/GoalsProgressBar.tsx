@@ -56,14 +56,14 @@ export default function GoalsProgressBar({ goals, forceCollapse = false }: Goals
     <Animated.View style={[styles.container, { height: containerHeight }]}>
       <Pressable style={styles.header} onPress={toggleCollapse}>
         <View style={styles.headerLeft}>
-          <Ionicons name="trophy-outline" size={16} color="#6B7280" />
+          <Ionicons name="trophy-outline" size={16} color="#7C3AED" />
           <Text style={styles.headerText}>Learning Goals</Text>
         </View>
         <Animated.View style={{ transform: [{ rotate: animation.interpolate({
           inputRange: [0, 1],
           outputRange: ['0deg', '180deg']
         }) }] }}>
-          <Ionicons name="chevron-up" size={16} color="#6B7280" />
+          <Ionicons name="chevron-up" size={16} color="#7C3AED" />
         </Animated.View>
       </Pressable>
       <Animated.ScrollView 
@@ -140,9 +140,8 @@ export default function GoalsProgressBar({ goals, forceCollapse = false }: Goals
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F9FAFB',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#E9D5FF',
+    borderBottomWidth: 0,
     overflow: 'hidden',
   },
   header: {
@@ -152,7 +151,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     justifyContent: 'space-between',
     height: 40,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#E9D5FF',
   },
   headerLeft: {
     flexDirection: 'row',
@@ -160,9 +159,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#7C3AED',
   },
   goalsContainer: {
     paddingHorizontal: 16,
@@ -170,48 +169,57 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   goalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 8,
-    width: 120,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: '#E9D5FF',
+    borderRadius: 12,
+    padding: 10,
+    width: 115,
+    borderWidth: 2,
+    borderColor: '#A78BFA',
+    minHeight: 70,
   },
   goalCompleted: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
+    backgroundColor: '#D1FAE5',
+    borderColor: '#34D399',
+    borderWidth: 2,
   },
   goalActive: {
-    backgroundColor: '#EEF2FF',
-    borderColor: '#C7D2FE',
-    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#7C3AED',
+    borderWidth: 3,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   goalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
     gap: 4,
   },
   goalNumber: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontWeight: '700',
+    color: '#7C3AED',
   },
   goalNumberCompleted: {
-    color: '#10B981',
+    color: '#059669',
   },
   goalNumberActive: {
-    color: '#6366F1',
+    color: '#7C3AED',
   },
   goalTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#374151',
-    lineHeight: 16,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1F2937',
+    lineHeight: 13,
     marginBottom: 4,
+    flexWrap: 'wrap',
   },
   goalTitleCompleted: {
-    color: '#059669',
+    color: '#047857',
+    fontWeight: '700',
   },
   scoreContainer: {
     marginTop: 4,
@@ -225,7 +233,7 @@ const styles = StyleSheet.create({
   },
   scoreFill: {
     height: '100%',
-    backgroundColor: '#6366F1',
+    backgroundColor: '#8B5CF6',
     borderRadius: 2,
   },
   scoreFillCompleted: {

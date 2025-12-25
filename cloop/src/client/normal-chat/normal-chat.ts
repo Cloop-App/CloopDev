@@ -2,6 +2,7 @@ import { API_BASE_URL } from '../../config/api';
 
 export interface NormalChatMessage {
   id: number;
+  user_id?: number;
   sender?: string;
   message?: string;
   message_type?: string;
@@ -27,15 +28,15 @@ export interface SendNormalMessageResponse {
  * Fetch normal chat messages for the authenticated user
  */
 export const fetchNormalChatMessages = async (
-  opts?: { 
-    userId?: number; 
-    baseUrl?: string; 
+  opts?: {
+    userId?: number;
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<NormalChatResponse> => {
   const base = opts?.baseUrl || API_BASE_URL;
   const url = new URL('/api/normal-chat', base);
-  
+
   if (opts?.userId) {
     url.searchParams.set('user_id', String(opts.userId));
   }
@@ -69,15 +70,15 @@ export const sendNormalChatMessage = async (
     message?: string;
     file_url?: string;
   },
-  opts?: { 
-    userId?: number; 
-    baseUrl?: string; 
+  opts?: {
+    userId?: number;
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<SendNormalMessageResponse> => {
   const base = opts?.baseUrl || API_BASE_URL;
   const url = new URL('/api/normal-chat/message', base);
-  
+
   if (opts?.userId) {
     url.searchParams.set('user_id', String(opts.userId));
   }
@@ -108,15 +109,15 @@ export const sendNormalChatMessage = async (
  * Clear all normal chat messages for the authenticated user
  */
 export const clearNormalChatHistory = async (
-  opts?: { 
-    userId?: number; 
-    baseUrl?: string; 
+  opts?: {
+    userId?: number;
+    baseUrl?: string;
     token?: string;
   }
 ): Promise<{ message: string }> => {
   const base = opts?.baseUrl || API_BASE_URL;
   const url = new URL('/api/normal-chat/clear', base);
-  
+
   if (opts?.userId) {
     url.searchParams.set('user_id', String(opts.userId));
   }

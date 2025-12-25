@@ -7,6 +7,8 @@ export interface User {
   user_id: number;
   email: string;
   name: string;
+  grade_level?: string;
+  subjects?: string[];
 }
 
 export interface AuthState {
@@ -42,7 +44,7 @@ class AuthService {
         AsyncStorage.getItem(AUTH_TOKEN_KEY),
         AsyncStorage.getItem(USER_KEY)
       ]);
-      
+
       if (token && userData) {
         const user = JSON.parse(userData);
         this._authState = {
@@ -95,13 +97,13 @@ class AuthService {
       // Store the actual JWT token, not a placeholder
       await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
-      
+
       this._authState = {
         token,
         user,
         isAuthenticated: true,
       };
-      
+
       this.notifyListeners();
     } catch (error) {
       console.error('Error storing auth data:', error);
@@ -113,13 +115,13 @@ class AuthService {
     try {
       await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
       await AsyncStorage.removeItem(USER_KEY);
-      
+
       this._authState = {
         token: null,
         user: null,
         isAuthenticated: false,
       };
-      
+
       this.notifyListeners();
     } catch (error) {
       console.error('Error clearing auth data:', error);
