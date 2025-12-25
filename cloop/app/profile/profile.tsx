@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, ActivityIndicator, Image, ScrollView, Pressable, Modal, Alert, Platform } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { fetchUserProfile, UserProfile } from '../../src/client/profile/fetch-profile'
 import { useAuth } from '../../src/context/AuthContext'
@@ -10,6 +11,7 @@ import { BottomNavigation } from '../../components/navigation/BottomNavigation'
 
 export default function ProfileScreen() {
 	const router = useRouter()
+	const insets = useSafeAreaInsets()
 	const { isAuthenticated, user, token, logout } = useAuth()
 	const [profile, setProfile] = useState<UserProfile | null>(null)
 	const [loading, setLoading] = useState(true)
@@ -240,7 +242,7 @@ export default function ProfileScreen() {
 	return (
 		<View style={styles.container}>
 			{/* Header */}
-			<View style={styles.header}>
+			<View style={[styles.header, { paddingTop: insets.top + 10 }]}>
 				<Pressable
 					style={styles.backButton}
 					onPress={() => router.back()}
@@ -433,7 +435,6 @@ const styles = StyleSheet.create({
 	},
 	header: {
 		backgroundColor: '#8B5CF6',
-		paddingTop: Platform.OS === 'android' ? 40 : 50,
 		paddingHorizontal: 20,
 		paddingBottom: 24,
 		flexDirection: 'row',

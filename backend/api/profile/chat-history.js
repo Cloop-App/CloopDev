@@ -45,7 +45,10 @@ router.get('/', authenticateToken, async (req, res) => {
         title: topic.title,
         subject: topic.subjects?.name || null,
         chapter: topic.chapters?.title || null,
-        last_activity: entry.created_at
+        last_activity: entry.created_at,
+        is_completed: topic.is_completed || false,
+        completion_percent: topic.completion_percent || 0,
+        chat_count: 0 // Placeholder, or calculate if feasible
       });
     }
 

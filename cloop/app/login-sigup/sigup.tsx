@@ -330,7 +330,7 @@ export default function SignupScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 20}
     >
       <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>

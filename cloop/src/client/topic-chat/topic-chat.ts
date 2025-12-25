@@ -244,3 +244,36 @@ export const uploadFile = async (
     }, 1000);
   });
 };
+
+/**
+ * Update time spent on a topic
+ */
+export const updateTopicTime = async (
+  topicId: number,
+  sessionTimeSeconds: number,
+  opts?: {
+    baseUrl?: string;
+    token?: string;
+  }
+): Promise<{ success: boolean }> => {
+  const base = opts?.baseUrl || API_BASE_URL;
+  const url = new URL(`/api/topic-chats/${topicId}/update-time`, base);
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (opts?.token) {
+    headers.Authorization = `Bearer ${opts.token}`;
+  }
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ session_time_seconds: sessionTimeSeconds }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || 'Failed to update time');
+  }
+
+  return response.json();
+};

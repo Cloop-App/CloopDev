@@ -29,7 +29,8 @@ import {
   sendTopicChatMessage,
   TopicChatMessage,
   TopicChatDetails,
-  TopicGoal
+  TopicGoal,
+  updateTopicTime
 } from '../../src/client/topic-chat/topic-chat';
 import { useSpeechRecognition } from '../../src/hooks/useSpeechRecognition';
 
@@ -111,8 +112,13 @@ export default function TopicChatScreen() {
   }, [messages, sending]);
 
   useEffect(() => {
-    // Update timer every second
+    // Update timer every second, but only if not completed
     const interval = setInterval(() => {
+      // If topic is completed, stop timer (or don't increment)
+      if (topic?.is_completed) {
+        return;
+      }
+
       const now = new Date();
       const sessionDiff = Math.floor((now.getTime() - sessionStartTime.getTime()) / 1000);
       setCurrentSessionTime(sessionDiff);
@@ -129,17 +135,13 @@ export default function TopicChatScreen() {
   useEffect(() => {
     const saveTimeSpent = async () => {
       if (currentSessionTime > 0 && topicId && user && token) {
+        // Don't update time if topic is already completed (to avoid runaway counting after goal completion)
+        if (topic?.is_completed) return;
+
         try {
           // Send a silent update to save time
-          await fetch(`${API_BASE_URL}/api/topic-chats/${topicId}/update-time`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              session_time_seconds: currentSessionTime
-            })
+          await updateTopicTime(parseInt(topicId), currentSessionTime, {
+            token: token || undefined
           });
         } catch (err) {
           console.error('Error saving time spent:', err);
@@ -282,6 +284,11 @@ export default function TopicChatScreen() {
       // Update goals if returned in response (to sync progress instantly)
       if ((response as any).goals) {
         setGoals((response as any).goals);
+      }
+
+      // If backend says all goals completed, update local topic state to stop timer
+      if ((response as any).all_goals_completed) {
+        setTopic(prev => prev ? { ...prev, is_completed: true } : null);
       }
 
       // Add feedback to the feedback map for user message
@@ -537,6 +544,11 @@ export default function TopicChatScreen() {
       emoji = message.feedback.emoji;
     }
 
+    // Force default bubble color for AI to ensure it picks up the new #F0DBFF from MessageBubble
+    if (!isUser && bubbleColor === 'default') {
+      // No specific override needed, MessageBubble handles it
+    }
+
     if (message.emoji && !emoji) {
       emoji = message.emoji;
     }
@@ -619,7 +631,7 @@ export default function TopicChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -631,13 +643,10 @@ export default function TopicChatScreen() {
         </Pressable>
 
         <View style={styles.headerContent}>
-          <Image source={LOGO_IMG} style={styles.headerLogo} resizeMode="contain" />
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>{topic?.title || topicTitle}</Text>
-            <View style={styles.timerContainer}>
-              <Ionicons name="time-outline" size={14} color="#FFFFFF" />
-              <Text style={styles.timerText}>{elapsedTime}</Text>
-            </View>
+          <Text style={styles.headerTitle}>{topic?.title || topicTitle}</Text>
+          <View style={styles.timerContainer}>
+            <Ionicons name="time-outline" size={14} color="#E9D5FF" />
+            <Text style={styles.timerText}>{elapsedTime}</Text>
           </View>
         </View>
       </View>
@@ -656,7 +665,7 @@ export default function TopicChatScreen() {
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior="padding"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
         {/* Messages */}
         <ScrollView
@@ -684,10 +693,10 @@ export default function TopicChatScreen() {
             <TextInput
               style={styles.textInput}
               placeholder="Type your answer..."
-              placeholderTextColor="rgba(255,255,255,0.7)"
+              placeholderTextColor="#828282"
               value={inputText}
               onChangeText={setInputText}
-              multiline
+              multiline={false}
               maxLength={500}
               editable={!sending}
               onFocus={() => setIsInputFocused(true)}
@@ -695,34 +704,32 @@ export default function TopicChatScreen() {
               onSubmitEditing={() => handleSendMessage()}
             />
 
-            <View style={styles.inputActions}>
-              <Pressable
-                style={styles.actionButton}
-                onPress={handleMicPress}
-              >
-                <Ionicons
-                  name={isListening ? "mic" : "mic-outline"}
-                  size={24}
-                  color={isListening ? "#FFD700" : "#FFF"}
-                />
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.sendButton,
-                  (!inputText.trim() || sending) && styles.sendButtonDisabled
-                ]}
-                onPress={() => handleSendMessage()}
-                disabled={!inputText.trim() || sending}
-              >
-                {sending ? (
-                  <ActivityIndicator size="small" color="#9269F0" />
-                ) : (
-                  <Ionicons name="arrow-up" size={24} color="#9269F0" />
-                )}
-              </Pressable>
-            </View>
+            <Pressable
+              style={styles.actionButton}
+              onPress={handleMicPress}
+            >
+              <Ionicons
+                name={isListening ? "mic" : "mic-outline"}
+                size={20}
+                color={isListening ? "#FFD700" : "#828282"}
+              />
+            </Pressable>
           </View>
+
+          <Pressable
+            style={[
+              styles.sendButton,
+              (!inputText.trim() || sending) && styles.sendButtonDisabled
+            ]}
+            onPress={() => handleSendMessage()}
+            disabled={!inputText.trim() || sending}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+            )}
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -743,6 +750,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: THEME.colors.text.secondary,
+    fontFamily: 'System',
   },
   errorContainer: {
     flex: 1,
@@ -756,12 +764,14 @@ const styles = StyleSheet.create({
     color: THEME.colors.primary,
     marginTop: 16,
     marginBottom: 8,
+    fontFamily: 'System',
   },
   errorMessage: {
     fontSize: 16,
     color: THEME.colors.text.secondary,
     textAlign: 'center',
     marginBottom: 24,
+    fontFamily: 'System',
   },
   retryButton: {
     backgroundColor: '#8B5CF6',
@@ -773,37 +783,46 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 16,
+    fontFamily: 'System',
   },
   header: {
+    backgroundColor: '#8B5CF6',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 60,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 12,
-    backgroundColor: '#8B5CF6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
     borderBottomWidth: 0,
   },
   backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   headerContent: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    // flexDirection: 'row', // Removed to stack title and timer
+    // alignItems: 'center', // Removed
   },
-  headerLogo: {
-    width: 32,
-    height: 32,
-    marginRight: 12,
-    borderRadius: 16,
-  },
+  // headerLogo removed
   headerText: {
-    flex: 1,
+    // flex: 1, // Removed
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'System',
+    // lineHeight: 28, // Removed to match default/topic.tsx
   },
   timerContainer: {
     flexDirection: 'row',
@@ -811,10 +830,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   timerText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    color: '#E9D5FF',
+    fontSize: 14, // Increased to 14 matches topic.tsx subtitle
     marginLeft: 4,
+    fontFamily: 'System',
   },
   contextBar: {
     flexDirection: 'row',
@@ -830,6 +849,7 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginLeft: 6,
     flex: 1,
+    fontFamily: 'System',
   },
   chatContainer: {
     flex: 1,
@@ -838,7 +858,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    padding: 16,
+    paddingHorizontal: 10,
+    paddingTop: 20,
     paddingBottom: 8,
   },
   messageRow: {
@@ -868,11 +889,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#E5E7EB',
+    borderRadius: 16,
+    padding: 4,
   },
   aiAvatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 20,
+    height: 20,
+    borderRadius: 0,
   },
   userAvatar: {
     width: 32,
@@ -885,48 +909,58 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
   },
-
   inputContainer: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 10,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#8B5CF6',
-    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    minHeight: 48,
+    height: 35,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#828282',
   },
   textInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFF',
-    maxHeight: 100,
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingLeft: 4,
-  },
-  inputActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    fontSize: 14,
+    color: '#828282',
+    paddingVertical: 0,
+    height: '100%',
+    fontFamily: 'System',
+    textAlignVertical: 'center',
   },
   actionButton: {
-    padding: 6,
+    padding: 4,
+    marginLeft: 4,
   },
   sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#A6A4F9',
+    borderWidth: 0,
+    // borderColor: '#9269F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    opacity: 0.5,
+    backgroundColor: '#A6A4F9',
   },
 });

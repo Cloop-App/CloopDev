@@ -26,7 +26,12 @@ const TABS: TabItem[] = [
     { id: 'profile', label: 'Profile', icon: 'person-outline' },
 ];
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onTabPress }) => {
+    const insets = useSafeAreaInsets();
+    // Default height 80 + bottom inset
+    const height = 80 + Math.max(insets.bottom, 10);
 
     const handlePress = (tabId: string) => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -34,8 +39,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.content}>
+        <View style={[styles.container, { height }]}>
+            <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 10) }]}>
                 {TABS.map((tab) => {
                     const isActive = activeTab === tab.id;
                     return (
@@ -47,7 +52,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
                         >
                             <Ionicons
                                 name={isActive ? (tab.icon.replace('-outline', '') as any) : tab.icon}
-                                size={24}
+                                size={28}
                                 color={isActive ? '#1F2937' : '#FFFFFF'}
                             />
                             {isActive && (
@@ -65,27 +70,22 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 0,
-        paddingBottom: 0,
-        paddingTop: 0,
-        backgroundColor: 'transparent',
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
+        backgroundColor: 'transparent',
     },
     content: {
         flexDirection: 'row',
         backgroundColor: '#8B5CF6', // Purple background
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
-        borderBottomLeftRadius: 0,
-        borderBottomRightRadius: 0,
+        borderRadius: 0, // Rectangular
         paddingHorizontal: 20,
-        paddingVertical: 16,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 16, // More height
+        paddingTop: 10, // Add top padding for balance
+        width: '100%',
+        height: '100%',
+        alignItems: 'flex-start', // Align items to top to handle dynamic height
         justifyContent: 'space-between',
-        alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: {
             width: 0,
@@ -94,8 +94,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 12,
         elevation: 8,
-        width: '100%',
-        minHeight: 80, // Enforce minimum height if needed
     },
     tab: {
         paddingVertical: 8,
@@ -108,12 +106,13 @@ const styles = StyleSheet.create({
     activeTab: {
         backgroundColor: '#FFFFFF', // White background for active pill
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 12,
     },
     label: {
         marginLeft: 8,
         fontSize: 14,
         fontWeight: '600',
         color: '#1F2937',
+        fontFamily: 'System', // Fallback or use specific font family if available
     },
 });

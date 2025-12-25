@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Platform
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -22,6 +23,7 @@ import { fetchSavedTopics, saveTopic, unsaveTopic } from '../../src/client/saved
 
 export default function TopicScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { chapterId, chapterTitle, subjectName } = useLocalSearchParams<{
     chapterId: string;
     chapterTitle: string;
@@ -280,7 +282,7 @@ export default function TopicScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
@@ -367,7 +369,7 @@ export default function TopicScreen() {
         onTabPress={(tabId) => {
           setActiveTab(tabId);
           if (tabId === 'home') router.push('/home/home' as any);
-          else if (tabId === 'statistics') router.push('/profile/metrics' as any);
+          else if (tabId === 'statistics') router.push('/metrices/home' as any);
           else if (tabId === 'profile') router.push('/profile/profile' as any);
         }}
       />
@@ -423,7 +425,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#8B5CF6',
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 50,
     paddingHorizontal: 20,
     paddingBottom: 16,
     flexDirection: 'row',
@@ -445,11 +446,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: 'System',
   },
   headerSubtitle: {
     fontSize: 14,
     color: '#E9D5FF',
     marginTop: 2,
+    fontFamily: 'System',
   },
   summaryCard: {
     backgroundColor: '#FFFFFF',
@@ -485,6 +488,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: THEME.colors.text.primary,
+    fontFamily: 'System',
   },
   summarySubtitle: {
     fontSize: 14,
@@ -530,10 +534,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: THEME.colors.text.primary,
     marginBottom: 16,
+    fontFamily: 'System',
   },
   topicCard: {
     backgroundColor: '#fff',
@@ -567,6 +572,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: THEME.colors.text.primary,
     marginBottom: 2,
+    fontFamily: 'System',
   },
   completedTopicTitle: {
     color: '#065F46',

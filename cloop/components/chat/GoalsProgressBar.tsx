@@ -56,18 +56,22 @@ export default function GoalsProgressBar({ goals, forceCollapse = false }: Goals
     <Animated.View style={[styles.container, { height: containerHeight }]}>
       <Pressable style={styles.header} onPress={toggleCollapse}>
         <View style={styles.headerLeft}>
-          <Ionicons name="trophy-outline" size={16} color="#7C3AED" />
+          <Ionicons name="trophy-outline" size={16} color="#000000" />
           <Text style={styles.headerText}>Learning Goals</Text>
         </View>
-        <Animated.View style={{ transform: [{ rotate: animation.interpolate({
-          inputRange: [0, 1],
-          outputRange: ['0deg', '180deg']
-        }) }] }}>
-          <Ionicons name="chevron-up" size={16} color="#7C3AED" />
+        <Animated.View style={{
+          transform: [{
+            rotate: animation.interpolate({
+              inputRange: [0, 1],
+              outputRange: ['0deg', '180deg']
+            })
+          }]
+        }}>
+          <Ionicons name="chevron-up" size={16} color="#BCBBF6" />
         </Animated.View>
       </Pressable>
-      <Animated.ScrollView 
-        horizontal 
+      <Animated.ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.goalsContainer}
         style={{ opacity: animation }}
@@ -78,10 +82,10 @@ export default function GoalsProgressBar({ goals, forceCollapse = false }: Goals
           const score = progress?.score_percent ?? (progress && progress.num_questions ? Math.round(((progress.num_correct || 0) / (progress.num_questions || 1)) * 100) : 0);
           const isCompleted = !!progress?.is_completed;
           const isActive = !isCompleted && (index === 0 || !!goals[index - 1]?.chat_goal_progress?.[0]?.is_completed);
-          
+
           return (
-            <View 
-              key={goal.id} 
+            <View
+              key={goal.id}
               style={[
                 styles.goalCard,
                 isCompleted && styles.goalCompleted,
@@ -96,7 +100,7 @@ export default function GoalsProgressBar({ goals, forceCollapse = false }: Goals
                 ) : (
                   <Ionicons name="ellipse-outline" size={20} color="#9CA3AF" />
                 )}
-                <Text 
+                <Text
                   style={[
                     styles.goalNumber,
                     isCompleted && styles.goalNumberCompleted,
@@ -107,24 +111,24 @@ export default function GoalsProgressBar({ goals, forceCollapse = false }: Goals
                   {index + 1}
                 </Text>
               </View>
-              <Text 
+              <Text
                 style={[
                   styles.goalTitle,
                   isCompleted && styles.goalTitleCompleted
-                ]} 
+                ]}
                 numberOfLines={2}
               >
                 {goal.title}
               </Text>
-                {progress && score > 0 && (
+              {progress && score > 0 && (
                 <View style={styles.scoreContainer}>
                   <View style={styles.scoreBar}>
-                    <View 
+                    <View
                       style={[
                         styles.scoreFill,
                         { width: `${score}%` },
                         isCompleted && styles.scoreFillCompleted
-                      ]} 
+                      ]}
                     />
                   </View>
                   <Text style={styles.scoreText}>{Math.round(score)}%</Text>
@@ -159,9 +163,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   headerText: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#7C3AED',
+    color: '#000000',
   },
   goalsContainer: {
     paddingHorizontal: 16,
@@ -169,7 +173,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   goalCard: {
-    backgroundColor: '#E9D5FF',
+    backgroundColor: '#F0DBFF',
     borderRadius: 12,
     padding: 10,
     width: 115,

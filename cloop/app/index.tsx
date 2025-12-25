@@ -18,7 +18,7 @@ import { THEME } from '../src/constants/theme';
 // Note: User mentioned 'clooplogo.png' and 'robot.png' in 'assets/images'
 // Adjusting paths based on previous file context: '../assets/images/...'
 const CLOOP_LOGO = require('../assets/images/clooplogo.png');
-const ROBOT_IMG = require('../assets/images/robot1.jpg');
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -66,7 +66,7 @@ export default function Index() {
         {/* Branding Section */}
         <View style={styles.brandingSection}>
           <Image source={CLOOP_LOGO} style={styles.logoImage} resizeMode="contain" />
-          
+
         </View>
 
         {/* Main Content Section */}

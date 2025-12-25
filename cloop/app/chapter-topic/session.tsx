@@ -12,6 +12,7 @@ import {
   Image,
   RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -20,7 +21,7 @@ import { useChatHistory } from '../../src/client/profile/useProgress';
 import { THEME } from '../../src/constants/theme';
 import { BottomNavigation } from '../../components/navigation/BottomNavigation';
 import { SubjectIcon } from '../../components/common/SubjectIcon';
-import { fetchSavedTopics, SavedTopic } from '../../src/client/saved-topics/saved-topics-client';
+import { fetchSavedTopics, unsaveTopic, SavedTopic } from '../../src/client/saved-topics/saved-topics-client';
 
 
 const CLOOP_ICON = require('../../assets/images/cloop-icon.png');
@@ -29,6 +30,7 @@ type FilterType = 'saved' | 'completed' | 'incomplete';
 
 export default function SessionScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
   const { academicInfo } = useUserProfile();
   const { chatHistory, loading, refetch } = useChatHistory();
@@ -70,6 +72,21 @@ export default function SessionScreen() {
 
 
 
+
+
+  // Handle unsave
+  const handleUnsave = async (topicId: number) => {
+    if (!user?.user_id) return;
+    try {
+      // Optimistically update UI
+      setSavedTopics(prev => prev.filter(t => t.topic_id !== topicId));
+
+      await unsaveTopic(user.user_id, topicId, token || undefined);
+    } catch (err) {
+      console.error('Error unsaving topic:', err);
+      // Revert if error? For now, we assume success or user refreshes.
+    }
+  };
 
   // Helper functions from Home Screen
   const getBoardCode = (boardName: string): string => {
@@ -114,7 +131,7 @@ export default function SessionScreen() {
 
       // Filter by type
       if (filterType === 'completed') {
-        return true;
+        return session.is_completed;
       } else if (filterType === 'incomplete') {
         return !session.is_completed;
       }
@@ -133,7 +150,7 @@ export default function SessionScreen() {
         {
           paddingVertical: 12,
           paddingHorizontal: 16,
-          marginHorizontal: -10, // Make card wider by extending into parent padding
+          marginHorizontal: 20, // Standardize margin
           width: 'auto' // ensure it stretches
         }
       ]}
@@ -142,13 +159,19 @@ export default function SessionScreen() {
       }}
     >
       <View style={[styles.sessionHeader, { marginBottom: 0 }]}>
-        <View style={styles.sessionIconContainer}>
+        <Pressable
+          style={styles.sessionIconContainer}
+          onPress={(e) => {
+            e.stopPropagation(); // Stop parent onPress
+            handleUnsave(session.topic_id);
+          }}
+        >
           <Ionicons
             name="bookmark"
             size={24}
             color="#8B5CF6"
           />
-        </View>
+        </Pressable>
         <View style={styles.sessionInfo}>
           <Text style={styles.sessionTitle}>{session.title}</Text>
           <Text style={styles.sessionSubject}>{session.subject}</Text>
@@ -181,27 +204,29 @@ export default function SessionScreen() {
         <Ionicons name="chevron-forward" size={20} color={THEME.colors.text.secondary} />
       </View>
 
-      <View style={styles.progressSection}>
-        <View style={styles.progressInfo}>
-          <Text style={styles.progressText}>
-            In progress: {Math.round(session.completion_percent || 0)}%
-          </Text>
-          <Text style={styles.daysText}>
-            {session.chat_count || 0} sessions
-          </Text>
+      {!session.is_completed && (
+        <View style={styles.progressSection}>
+          <View style={styles.progressInfo}>
+            <Text style={styles.progressText}>
+              In progress: {Math.round(session.completion_percent || 0)}%
+            </Text>
+            <Text style={styles.daysText}>
+              {session.chat_count || 0} sessions
+            </Text>
+          </View>
+          <View style={styles.progressBarContainer}>
+            <View
+              style={[
+                styles.progressBar,
+                {
+                  width: `${session.completion_percent || 0}%`,
+                  backgroundColor: '#8B5CF6'
+                }
+              ]}
+            />
+          </View>
         </View>
-        <View style={styles.progressBarContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              {
-                width: `${session.completion_percent || 0}%`,
-                backgroundColor: session.is_completed ? '#10B981' : '#8B5CF6'
-              }
-            ]}
-          />
-        </View>
-      </View>
+      )}
     </Pressable>
   );
 
@@ -222,7 +247,7 @@ export default function SessionScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header - Matching Home Screen */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10, paddingBottom: 15 }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
             <Image
@@ -357,7 +382,7 @@ export default function SessionScreen() {
                 onPress={() => router.push(`/chapter-topic/chapter?subjectId=${userSubject.subject.id}&subjectName=${encodeURIComponent(userSubject.subject.name)}` as any)}
               >
                 <View style={styles.subjectIconContainer}>
-                  <SubjectIcon subject={userSubject.subject.name} size={60} />
+                  <SubjectIcon subject={userSubject.subject.name} size={45} />
                 </View>
                 <Text style={styles.subjectName}>{userSubject.subject.name}</Text>
               </Pressable>
@@ -391,11 +416,13 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#8B5CF6',
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 40,
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+    justifyContent: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   headerTop: {
     flexDirection: 'row',
@@ -447,24 +474,23 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 10,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginBottom: 24,
-    marginTop: 12,
+    marginTop: 20,
+    marginHorizontal: 20,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E9D5FF',
-    borderRadius: 20, // Full pill shape
+    backgroundColor: '#E6E3FF',
+    borderRadius: 20,
     paddingHorizontal: 12,
-    height: 40,
+    height: 35,
   },
   searchInput: {
     flex: 1,
@@ -485,6 +511,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginBottom: 20,
+    paddingHorizontal: 20, // Add padding for scroll/container
   },
   filterButton: {
     paddingVertical: 8,
@@ -507,10 +534,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 16,
+    fontFamily: 'System',
+    marginHorizontal: 20,
   },
   sessionCard: {
     backgroundColor: '#FFFFFF',
@@ -522,6 +551,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
+    marginHorizontal: 20,
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -542,13 +572,16 @@ const styles = StyleSheet.create({
   },
   sessionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500', // Medium
     color: '#1F2937',
     marginBottom: 4,
+    fontFamily: 'System',
   },
   sessionSubject: {
     fontSize: 12,
+    fontWeight: '500', // Medium
     color: '#6B7280',
+    fontFamily: 'System',
   },
   progressSection: {
     marginTop: 8,
@@ -580,6 +613,7 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     paddingVertical: 48,
+    marginHorizontal: 20,
   },
   emptyTitle: {
     fontSize: 18,
@@ -598,6 +632,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 20,
+    paddingHorizontal: 20,
   },
   subjectCard: {
     width: '31%', // Slight increase to reduce horizontal gaps
@@ -620,10 +655,11 @@ const styles = StyleSheet.create({
     marginBottom: 4, // Reduced from 8
   },
   subjectName: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700', // Bold
     color: '#1F2937',
     textAlign: 'center',
+    fontFamily: 'System',
   },
   noSubjects: {
     fontSize: 14,

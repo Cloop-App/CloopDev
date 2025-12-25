@@ -12,6 +12,7 @@ import {
   Alert,
   Platform
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -22,6 +23,7 @@ import { BottomNavigation } from '../../components/navigation/BottomNavigation';
 
 export default function ChapterScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { subjectId, subjectName } = useLocalSearchParams<{
     subjectId: string;
     subjectName: string;
@@ -207,7 +209,7 @@ export default function ChapterScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
@@ -272,7 +274,7 @@ export default function ChapterScreen() {
         onTabPress={(tabId) => {
           setActiveTab(tabId);
           if (tabId === 'home') router.push('/home/home' as any);
-          else if (tabId === 'statistics') router.push('/profile/metrics' as any);
+          else if (tabId === 'statistics') router.push('/metrices/home' as any);
           else if (tabId === 'profile') router.push('/profile/profile' as any);
         }}
       />
@@ -328,7 +330,6 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#8B5CF6',
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 16 : 50,
     paddingHorizontal: 20,
     paddingBottom: 16,
     flexDirection: 'row',
@@ -350,11 +351,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: 'System',
   },
   headerSubtitle: {
     fontSize: 14,
     color: '#E9D5FF',
     marginTop: 2,
+    fontFamily: 'System',
   },
   summaryCard: {
     backgroundColor: '#FFFFFF',
@@ -381,6 +384,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#8B5CF6',
+    fontFamily: 'System',
   },
   summaryLabel: {
     fontSize: 12,
@@ -393,10 +397,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700', // Bold
     color: THEME.colors.text.primary,
     marginBottom: 16,
+    fontFamily: 'System',
   },
   chapterCard: {
     backgroundColor: '#fff',
@@ -429,6 +434,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: THEME.colors.text.primary,
     marginBottom: 2,
+    fontFamily: 'System',
   },
   chapterNumber: {
     fontSize: 14,

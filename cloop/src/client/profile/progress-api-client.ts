@@ -6,6 +6,9 @@ export interface ChatHistoryItem {
   subject: string;
   chapter: string;
   last_activity: string;
+  is_completed: boolean;
+  completion_percent: number;
+  chat_count: number;
 }
 
 export interface UserMetrics {
@@ -67,7 +70,7 @@ class ProgressApiClient {
 
   private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(options.headers as Record<string, string> || {}),

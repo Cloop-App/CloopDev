@@ -14,6 +14,7 @@ export function SessionSummaryCard({ summary, onOptionSelect, chatId }: SessionS
         incorrect_answers = 0,
         star_rating = 0,
         performance_percent = 0,
+        score_percent = 0,
         overall_score_percent = 0,
         performance_level = 'Good',
         performance_color = '#10B981',
@@ -22,7 +23,7 @@ export function SessionSummaryCard({ summary, onOptionSelect, chatId }: SessionS
         has_weak_areas = false
     } = summary;
 
-    const scorePercent = overall_score_percent || performance_percent;
+    const scorePercent = Number(score_percent) || Number(overall_score_percent) || Number(performance_percent) || 0;
 
     const getPerformanceColor = () => {
         if (performance_color) return performance_color;
@@ -44,23 +45,16 @@ export function SessionSummaryCard({ summary, onOptionSelect, chatId }: SessionS
     };
 
     return (
-        <View style={[styles.summaryCard, { backgroundColor: getCardBackgroundColor() }]}>
+        <View style={[styles.summaryCard]}>
             <View style={styles.summaryHeader}>
                 <Text style={styles.summaryTitle}>🎓 Session Complete!</Text>
                 <Text style={styles.performanceLevel}>{performance_level}</Text>
-                <View style={styles.starContainer}>
-                    {[...Array(5)].map((_, i) => (
-                        <Text key={i} style={styles.starIcon}>
-                            {i < star_rating ? '⭐' : '☆'}
-                        </Text>
-                    ))}
-                </View>
             </View>
 
             <View style={styles.performanceSection}>
-                <View style={[styles.scoreContainer, { backgroundColor: getScoreBackgroundColor() }]}>
+                <View style={[styles.scoreContainer]}>
                     <Text style={styles.trophyIcon}>🏆</Text>
-                    <Text style={[styles.performanceText, { color: getPerformanceColor() }]}>
+                    <Text style={[styles.performanceText, { color: '#000000' }]}>
                         Your Score - {scorePercent}%
                     </Text>
                 </View>
@@ -85,7 +79,7 @@ export function SessionSummaryCard({ summary, onOptionSelect, chatId }: SessionS
 
             {/* Error Types Section */}
             {top_error_types && top_error_types.length > 0 && (
-                <View style={styles.errorSection}>
+                <View style={[styles.errorSection, { backgroundColor: '#CFFF95', borderRadius: 12, padding: 12, borderTopWidth: 0 }]}>
                     <Text style={styles.sectionTitle}>📊 Common Mistakes</Text>
                     {top_error_types.slice(0, 3).map((error: any, index: number) => (
                         <View key={index} style={styles.errorItem}>
@@ -98,7 +92,7 @@ export function SessionSummaryCard({ summary, onOptionSelect, chatId }: SessionS
 
             {/* Weak Areas Section */}
             {has_weak_areas && weak_goals && weak_goals.length > 0 && (
-                <View style={styles.weakSection}>
+                <View style={[styles.weakSection, { backgroundColor: '#CFFF95', borderRadius: 12, padding: 12, borderTopWidth: 0 }]}>
                     <Text style={styles.sectionTitle}>💡 Areas to Improve</Text>
                     {weak_goals.map((goal: any, index: number) => (
                         <View key={index} style={styles.weakItem}>
@@ -135,13 +129,8 @@ const styles = StyleSheet.create({
     summaryCard: {
         borderRadius: 12,
         padding: 12,
-        borderWidth: 2,
-        borderColor: '#8B5CF6',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        // borderWidth: 2,
+        // borderColor: '#8B5CF6',
         maxWidth: '100%',
     },
     summaryHeader: {
@@ -205,13 +194,13 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     totalStatItem: {
-        backgroundColor: '#DDD6FE',
+        backgroundColor: '#B7FF5F',
     },
     correctStatItem: {
-        backgroundColor: '#D1FAE5',
+        backgroundColor: '#B7FF5F',
     },
     incorrectStatItem: {
-        backgroundColor: '#DDD6FE',
+        backgroundColor: '#B7FF5F',
     },
     statNumber: {
         fontSize: 20,

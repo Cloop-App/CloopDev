@@ -321,7 +321,10 @@ export default function NormalChatScreen() {
             style={styles.headerLogo}
             resizeMode="contain"
           />
-          <Text style={styles.headerTitle}>Cloop AI</Text>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Cloop AI</Text>
+            <Text style={styles.headerSubtitle}>Always here to help</Text>
+          </View>
         </View>
 
         <View style={styles.headerTitleContainer} />
@@ -340,7 +343,7 @@ export default function NormalChatScreen() {
       <KeyboardAvoidingView
         style={styles.chatContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
         <ScrollView
           ref={scrollViewRef}
@@ -387,30 +390,28 @@ export default function NormalChatScreen() {
             <TextInput
               style={styles.textInput}
               placeholder="Message Cloop AI..."
-              placeholderTextColor="rgba(255,255,255,0.7)"
+              placeholderTextColor="#828282"
               value={inputText}
               onChangeText={setInputText}
-              multiline={true} // Allow multiline but looks like single line
+              multiline={false} // Single line appearance as per height 35
               editable={!sending}
             />
-
-            <View style={styles.inputActions}>
-              <Pressable onPress={handleMicPress} style={styles.actionButton}>
-                <Ionicons name={isListening ? "mic" : "mic-outline"} size={22} color={isListening ? "#FFD700" : "#FFF"} />
-              </Pressable>
-              <Pressable
-                onPress={handleSendMessage}
-                disabled={!inputText.trim() || sending}
-                style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]}
-              >
-                {sending ? (
-                  <ActivityIndicator size="small" color="#9269F0" />
-                ) : (
-                  <Ionicons name="arrow-forward" size={18} color="#9269F0" />
-                )}
-              </Pressable>
-            </View>
+            <Pressable onPress={handleMicPress} style={styles.actionButton}>
+              <Ionicons name={isListening ? "mic" : "mic-outline"} size={20} color={isListening ? "#FFD700" : "#FFF"} />
+            </Pressable>
           </View>
+
+          <Pressable
+            onPress={handleSendMessage} // Correct function reference
+            disabled={!inputText.trim() || sending}
+            style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="#9269F0" />
+            ) : (
+              <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+            )}
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
 
@@ -490,14 +491,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
+    backgroundColor: '#8B5CF6',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : (Platform.OS === 'ios' ? 60 : 20),
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16, // Increased padding
-    backgroundColor: '#9269F0', // Purple header
-    borderBottomWidth: 0,
-    elevation: 0,
   },
   headerLeft: {
     width: 'auto',
@@ -512,13 +516,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerTitleContainer: {
-    flex: 1,
-    alignItems: 'center',
+    flex: 1, // Spacer
+  },
+  headerTextContainer: {
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#FFF', // White title
+    fontWeight: '700',
+    color: '#FFF',
+    fontFamily: 'System',
+    lineHeight: 28,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#E9D5FF',
+    fontFamily: 'System',
   },
   iconButton: {
     padding: 4,
@@ -531,7 +544,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 20,
     paddingBottom: 40,
   },
@@ -539,13 +552,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    // Removed marginTop: -40 to allow true centering
   },
   emptyIconContainer: {
-    width: 120, // Increased size for logo
+    width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#fff', // White bg for logo
+    backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
@@ -560,14 +572,16 @@ const styles = StyleSheet.create({
     height: 70,
   },
   emptyGreeting: {
-    fontSize: 22, // Slightly larger
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 8,
+    fontFamily: 'System',
   },
   emptySubtext: {
     fontSize: 16,
     color: '#6b7280',
+    fontFamily: 'System',
   },
   messageContainer: {
     flexDirection: 'row',
@@ -582,10 +596,15 @@ const styles = StyleSheet.create({
     paddingLeft: 32,
   },
   aiAvatar: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     marginRight: 12,
     marginTop: 2,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 4,
   },
   aiIconPlaceholder: {
     width: 30,
@@ -599,6 +618,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,
+    fontFamily: 'System',
   },
   messageBubble: {
     borderRadius: 8,
@@ -618,12 +638,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#374151',
+    fontFamily: 'System',
   },
   userMessageText: {
     color: '#111827',
+    fontFamily: 'System',
   },
   aiMessageText: {
     color: '#374151',
+    fontFamily: 'System',
   },
   messageImage: {
     width: 200,
@@ -635,7 +658,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
-    paddingLeft: 16, // Align with messages
+    paddingLeft: 16,
   },
   typingBubble: {
     flexDirection: 'row',
@@ -649,63 +672,73 @@ const styles = StyleSheet.create({
   typingText: {
     color: '#6b7280',
     fontSize: 14,
+    fontFamily: 'System',
   },
   headerLogo: {
-    width: 30,
-    height: 30,
-    marginRight: 8,
-    borderRadius: 15, // Circular
+    width: 50,
+    height: 50,
+    marginRight: 12,
+    borderRadius: 25,
   },
   aiAvatarImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 20,
+    height: 20,
+    borderRadius: 0,
   },
+
   inputContainer: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 10,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: 'transparent',
+    flexDirection: 'row', // Align pill and button in row
+    alignItems: 'center',
+    gap: 10, // 10pt Gap
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#9269F0',
-    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    minHeight: 48,
+    height: 35,
+    flex: 1, // Take remaining width
+    borderWidth: 1,
+    borderColor: '#828282',
   },
   textInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFF',
-    maxHeight: 100,
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingLeft: 4,
-  },
-  inputActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    fontSize: 14,
+    color: '#828282',
+    paddingVertical: 0,
+    height: '100%',
+    fontFamily: 'System',
+    textAlignVertical: 'center',
   },
   actionButton: {
-    padding: 6,
+    padding: 4,
+    marginLeft: 4,
   },
   sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#A6A4F9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    opacity: 0.5,
+    backgroundColor: '#A6A4F9',
   },
 
-  // Drawer Styles
   drawerOverlay: {
     position: 'absolute',
     top: 0,
@@ -721,7 +754,7 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: DRAWER_WIDTH,
-    backgroundColor: '#FFF', // White Sidebar
+    backgroundColor: '#FFF',
     zIndex: 1000,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
@@ -741,9 +774,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   drawerTitle: {
-    color: '#000', // Dark title
+    color: '#000',
     fontSize: 18,
     fontWeight: 'bold',
+    fontFamily: 'System',
   },
   drawerItems: {
     flex: 1,
@@ -756,6 +790,7 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: 'System',
   },
   historyItemWrapper: {
     flexDirection: 'row',
@@ -773,9 +808,9 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   historyText: {
-    color: '#1f2937', // Dark text
+    color: '#1f2937',
     fontSize: 14,
     flex: 1,
+    fontFamily: 'System',
   },
-  // Removed footer styles
 });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Pressable, Image, Platform, ActivityIndicator, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable, Image, Platform, ActivityIndicator, ImageBackground } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -20,6 +21,7 @@ const formatTime = (seconds: number) => {
 
 export default function PerSubjectAnalysisScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { subjectId } = useLocalSearchParams();
     const { token } = useAuth();
 
@@ -73,16 +75,16 @@ export default function PerSubjectAnalysisScreen() {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.loadingContainer}>
+            <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#9269F0" />
-            </SafeAreaView>
+            </View>
         );
     }
 
     if (error || !data) {
         return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
+            <View style={styles.container}>
+                <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                     <Pressable onPress={() => router.back()} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color="#FFF" />
                     </Pressable>
@@ -91,7 +93,7 @@ export default function PerSubjectAnalysisScreen() {
                 <View style={styles.content}>
                     <Text style={styles.errorText}>Could not load subject data.</Text>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
@@ -106,11 +108,11 @@ export default function PerSubjectAnalysisScreen() {
     const bestPossible = Math.min(100, currentScore + 15); // Hypothetical potential
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#9269F0" />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <Pressable onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#FFF" />
                 </Pressable>
@@ -297,7 +299,7 @@ export default function PerSubjectAnalysisScreen() {
                         {topicReports.map((report, index) => (
                             <Pressable
                                 key={index}
-                                style={[styles.miniReportCard, { backgroundColor: report.performance_percent >= 75 ? '#D1FAE5' : report.performance_percent >= 50 ? '#FEF3C7' : '#FEE2E2' }]}
+                                style={[styles.miniReportCard, { backgroundColor: report.score_percent >= 75 ? '#D1FAE5' : report.score_percent >= 50 ? '#FEF3C7' : '#FEE2E2' }]}
                                 onPress={() => {
                                     setSelectedReport(report);
                                     setModalVisible(true);
@@ -311,7 +313,7 @@ export default function PerSubjectAnalysisScreen() {
                                 </View>
 
                                 <View style={styles.reportStats}>
-                                    <Text style={styles.reportScore}>{report.performance_percent || 0}%</Text>
+                                    <Text style={styles.reportScore}>{report.score_percent || 0}%</Text>
                                     <Text style={styles.reportLevel}>{report.performance_level}</Text>
                                 </View>
 
@@ -392,7 +394,7 @@ export default function PerSubjectAnalysisScreen() {
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -409,7 +411,6 @@ const styles = StyleSheet.create({
     },
     header: {
         backgroundColor: '#9269F0',
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 50,
         paddingHorizontal: 20,
         paddingBottom: 20,
         flexDirection: 'row',

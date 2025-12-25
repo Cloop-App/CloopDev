@@ -94,7 +94,7 @@ export default function LoginScreen() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
     >
       <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>

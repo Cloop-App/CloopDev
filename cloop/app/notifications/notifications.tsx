@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Platform, StatusBar, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Platform, StatusBar, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/context/AuthContext';
@@ -8,6 +9,7 @@ import { BottomNavigation } from '../../components/navigation/BottomNavigation';
 
 export default function NotificationsScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { token } = useAuth();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
@@ -104,11 +106,11 @@ export default function NotificationsScreen() {
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <Pressable onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
                 </Pressable>
@@ -139,7 +141,7 @@ export default function NotificationsScreen() {
 
             {/* Bottom Navigation */}
             <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} />
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -150,7 +152,6 @@ const styles = StyleSheet.create({
     },
     header: {
         backgroundColor: '#8B5CF6',
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 50,
         paddingHorizontal: 20,
         paddingBottom: 20,
         flexDirection: 'row',

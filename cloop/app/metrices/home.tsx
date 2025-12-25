@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, StatusBar, Pressable, Image, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, Pressable, Image, Platform, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useUserMetrics } from '../../src/client/profile/useProgress';
@@ -65,6 +66,7 @@ interface RecentReport {
 
 export default function MetricsHomeScreen() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { token } = useAuth();
     const { academicInfo } = useUserProfile();
 
@@ -112,11 +114,11 @@ export default function MetricsHomeScreen() {
     const subjectsToDisplay = academicInfo?.user_subjects?.map(us => us.subject) || academicInfo?.subjects?.map(s => ({ name: s, id: Math.random() })) || [];
 
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#9269F0" />
 
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
                 <View style={styles.headerLeft}>
                     <View style={styles.avatarContainer}>
                         <Image source={require('../../assets/images/cloop-icon.png')} style={styles.avatar} />
@@ -232,7 +234,7 @@ export default function MetricsHomeScreen() {
 
             {/* Bottom Navigation */}
             <BottomNavigation activeTab="statistics" onTabPress={handleTabPress} />
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -243,7 +245,6 @@ const styles = StyleSheet.create({
     },
     header: {
         backgroundColor: '#9269F0', // Updated purple
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 50,
         paddingHorizontal: 20,
         paddingBottom: 20,
         flexDirection: 'row',

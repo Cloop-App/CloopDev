@@ -40,13 +40,13 @@ export default function MessageBubble({
   const isUser = sender === 'user';
 
   const getDynamicBubbleColor = () => {
-    if (messageType === 'user_correction' && isUser) {
+    if (messageType === 'user_correction') {
       return 'transparent'; // Remove outer grey wrapper
     }
     if (bubbleColor === 'green') return '#D1FAE5';
     if (bubbleColor === 'red') return '#FEE2E2';
-    if (isUser) return '#E9D5FF';
-    return '#F3F4F6';
+    if (isUser) return '#A6A4F9'; // User Bubble color
+    return '#F0DBFF'; // AI Bubble Color
   };
 
   const getDynamicTextColor = () => {

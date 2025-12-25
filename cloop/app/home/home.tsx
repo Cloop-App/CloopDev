@@ -8,12 +8,16 @@ import { useChatHistory } from '../../src/client/profile/useProgress';
 import { THEME } from '../../src/constants/theme';
 import { BottomNavigation } from '../../components/navigation/BottomNavigation';
 import { SubjectIcon } from '../../components/common/SubjectIcon';
+import { API_BASE_URL } from '../../src/config/api';
+import { ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CLOOP_ICON = require('../../assets/images/cloop-icon.png');
 
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isAuthenticated, logout, user, isLoading } = useAuth();
   const {
     profile,
@@ -41,6 +45,30 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
 
+  interface RecentReport {
+    id: number;
+    topic_id: number;
+    score_percent: number;
+    total_questions: number;
+    correct_answers: number;
+    incorrect_answers: number;
+    topics: {
+      title: string;
+      chapters: {
+        title: string;
+        subjects: {
+          id: number;
+        }
+      };
+      subject_id?: number; // Optional fallback
+    };
+    created_at: string;
+    subject_id?: number; // Top level fallback
+  }
+
+  const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(true);
+
   const fetchUnreadCount = async () => {
     if (isAuthenticated && ((user as any)?.token || (user as any)?.session?.access_token)) {
       try {
@@ -58,7 +86,34 @@ export default function HomeScreen() {
   useEffect(() => {
     if (isAuthenticated) {
       fetchUnreadCount();
-      // Optional: Polling or focus effect could go here
+      // Fetch Recent Reports
+      const fetchRecentReports = async () => {
+        const token = (user as any)?.token || (user as any)?.session?.access_token;
+
+        if (!token) {
+          console.log("No token found for recent reports fetch");
+          setLoadingReports(false);
+          return;
+        }
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/topic-chats/reports/recent`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setRecentReports(data);
+          }
+        } catch (error) {
+          console.error("Failed to fetch recent reports", error);
+        } finally {
+          setLoadingReports(false);
+        }
+      };
+
+      fetchRecentReports();
     }
   }, [isAuthenticated, refreshing]); // Re-fetch on refresh
 
@@ -312,7 +367,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#8B5CF6" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10, paddingBottom: 15 }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerLeft}>
             <Image
@@ -374,6 +429,59 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
+        {/* Recent (Quick Overview) Section */}
+        <Text style={styles.sectionTitle}>Recent</Text>
+
+        {loadingReports ? (
+          <ActivityIndicator size="small" color="#8B5CF6" style={{ marginBottom: 20 }} />
+        ) : recentReports.length > 0 ? (
+          <View style={styles.recentReportsContainer}>
+            {recentReports.slice(0, 2).map((report) => ( // Show max 2 on home
+              <Pressable
+                key={report.id}
+                style={styles.reportCard}
+                onPress={() => {
+                  // Try to resolve subject ID from nested data or fallback
+                  const subjectId = report.topics?.chapters?.subjects?.id || report.topics?.subject_id || report.subject_id;
+                  if (subjectId) {
+                    router.push({ pathname: '/metrices/persubject', params: { subjectId: subjectId } });
+                  } else {
+                    console.warn('Could not determine subject ID for navigation', report);
+                  }
+                }}
+              >
+                <View style={styles.reportHeader}>
+                  <View>
+                    <Text style={styles.reportTopic} numberOfLines={1}>{report.topics?.title || 'Unknown Topic'}</Text>
+                    <Text style={styles.reportChapter} numberOfLines={1}>{report.topics?.chapters?.title || 'Unknown Chapter'}</Text>
+                  </View>
+                  <View style={[styles.scoreBadge, { backgroundColor: report.score_percent >= 70 ? '#D1FAE5' : '#FEE2E2' }]}>
+                    <Text style={[styles.scoreText, { color: report.score_percent >= 70 ? '#059669' : '#DC2626' }]}>
+                      {report.score_percent}%
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.reportStatsRow}>
+                  <View style={styles.statItem}>
+                    <Ionicons name="checkmark-circle-outline" size={16} color="#059669" />
+                    <Text style={styles.statText}>{report.correct_answers} Correct</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Ionicons name="close-circle-outline" size={16} color="#DC2626" />
+                    <Text style={styles.statText}>{report.incorrect_answers} Incorrect</Text>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.emptyStateText}>No recent activity</Text>
+            <Text style={styles.emptyStateSubText}>Your recent learning sessions will appear here.</Text>
+          </View>
+        )}
+
         {/* Enrolled Subjects Title */}
         <Text style={styles.enrolledTitle}>Enrolled Subjects</Text>
 
@@ -410,7 +518,7 @@ export default function HomeScreen() {
           )}
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 140 }} />
       </ScrollView >
 
       {/* Floating Ask Tutor Button */}
@@ -449,16 +557,19 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#8B5CF6',
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 40,
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 0, // Rectangular
-    borderBottomRightRadius: 0,
+    justifyContent: 'flex-end',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 10, // Adjust for visual centering within the 100px height after StatusBar padding
   },
   headerLeft: {
     flexDirection: 'row',
@@ -475,14 +586,104 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerGreeting: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: 'System',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 12,
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
+  recentReportsContainer: {
+    marginBottom: 24,
+    gap: 12,
+    paddingHorizontal: 20,
+  },
+  reportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  reportTopic: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 2,
+    maxWidth: 220,
+  },
+  reportChapter: {
+    fontSize: 12,
+    color: '#6B7280',
+    maxWidth: 220,
+  },
+  scoreBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  scoreText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reportStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: 16,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: 12,
+    color: '#4B5563',
+    fontWeight: '500',
+  },
+  emptyStateContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  emptyStateSubText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
   },
   headerClass: {
-    fontWeight: '400',
-    fontSize: 14,
+    fontWeight: '600',
+    fontSize: 16,
     color: '#E9D5FF',
+    fontFamily: 'System',
   },
   headerBoard: {
     fontWeight: '600',
@@ -490,10 +691,11 @@ const styles = StyleSheet.create({
     color: '#F3E8FF',
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#E9D5FF',
     marginTop: 2,
-    fontWeight: '500',
+    fontWeight: '600',
+    fontFamily: 'System',
   },
   notificationButton: {
     width: 40,
@@ -525,18 +727,19 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginBottom: 24,
-    marginTop: 12, // Reduced top margin
+    marginTop: 20,
+    marginHorizontal: 20,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E9D5FF',
-    borderRadius: 20, // Full pill shape
+    borderRadius: 20,
     paddingHorizontal: 12,
-    height: 40,
+    height: 35,
   },
   searchInput: {
     flex: 1,
@@ -555,28 +758,30 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 10, // Reduced from 20 to 10
   },
   enrolledTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1F2937',
     marginBottom: 16,
+    marginHorizontal: 20,
+    fontFamily: 'System',
   },
   subjectsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    paddingHorizontal: 20,
     justifyContent: 'space-between',
+    rowGap: 20,
     marginBottom: 20,
   },
   subjectCard: {
-    width: '31%', // Slight increase to reduce horizontal gaps
+    width: '31%', // Fit 3 items (3 * 31% = 93%, leaving 7% for spacing)
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 10, // Reduced from 16
+    padding: 10,
     alignItems: 'center',
-    marginBottom: 12, // Reduced from 16
+    marginBottom: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -588,13 +793,14 @@ const styles = StyleSheet.create({
     height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4, // Reduced from 8
+    marginBottom: 4,
   },
   subjectName: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#1F2937',
     textAlign: 'center',
+    fontFamily: 'System',
   },
   noSubjects: {
     fontSize: 14,
@@ -605,8 +811,8 @@ const styles = StyleSheet.create({
   },
   floatingButton: {
     position: 'absolute',
-    bottom: 100, // Adjusted for new nav bar
-    right: 20,
+    bottom: 110,
+    right: 10,
     backgroundColor: '#8B5CF6',
     flexDirection: 'row',
     alignItems: 'center',
@@ -686,6 +892,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#1F2937',
+    fontFamily: 'System',
   },
   chatHistorySubject: {
     fontSize: 12,
@@ -703,14 +910,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   subjectProgress: {
-    fontSize: 10,
+    fontSize: 12,
+    fontWeight: '500',
     color: '#6B7280',
     marginTop: 4,
+    fontFamily: 'System',
   },
   subjectCompletion: {
-    fontSize: 10,
+    fontSize: 12,
+    fontWeight: '500',
     color: '#10B981',
     marginTop: 2,
-    fontWeight: '500',
+    fontFamily: 'System',
   },
 });
