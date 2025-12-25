@@ -5,6 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/cloop-icon.png",
+    "notification": {
+      "icon": "./assets/images/logo.png",
+      "color": "#ffffff"
+    },
     "scheme": "cloop",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
